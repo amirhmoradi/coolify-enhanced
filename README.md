@@ -1,6 +1,8 @@
 # Coolify Granular Permissions
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build and Publish Docker Image](https://github.com/amirhmoradi/coolify-granular-permissions/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/amirhmoradi/coolify-granular-permissions/actions/workflows/docker-publish.yml)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-coolify--granular--permissions-blue)](https://ghcr.io/amirhmoradi/coolify-granular-permissions)
 
 **Granular user role and project-level access management for Coolify v4**
 
@@ -25,25 +27,33 @@ This Laravel package extends Coolify with fine-grained access control:
 
 ## Installation
 
-### Option 1: Using Pre-built Docker Image
+### Option 1: Using Pre-built Docker Image (Recommended)
+
+Pre-built images are automatically published to GitHub Container Registry on every release.
 
 ```bash
-# Pull the custom image (replace with your registry)
-docker pull ghcr.io/your-username/coolify-granular-permissions:latest
+# Pull the latest image
+docker pull ghcr.io/amirhmoradi/coolify-granular-permissions:latest
 
 # Update your Coolify deployment
 cd /data/coolify/source
 ```
 
-Edit `docker-compose.prod.yml`:
+Create or edit `docker-compose.override.yml`:
 
 ```yaml
 services:
   coolify:
-    image: ghcr.io/your-username/coolify-granular-permissions:latest
+    image: ghcr.io/amirhmoradi/coolify-granular-permissions:latest
     environment:
       - COOLIFY_GRANULAR_PERMISSIONS=true
 ```
+
+**Available Image Tags:**
+- `latest` - Latest stable release (built against latest Coolify)
+- `vX.Y.Z` - Specific release version (e.g., `v1.0.0`)
+- `coolify-X.Y.Z` - Built against specific Coolify version (e.g., `coolify-4.0.0-beta.365`)
+- `sha-XXXXXX` - Specific commit SHA for traceability
 
 Restart Coolify:
 
