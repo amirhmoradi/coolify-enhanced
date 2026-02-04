@@ -1,0 +1,14 @@
+# Docker Compose override for Coolify with Granular Permissions
+#
+# Copy this file to /data/coolify/source/docker-compose.override.yml
+# Then run: docker compose up -d
+#
+# Alternatively, modify your docker-compose.prod.yml directly.
+
+services:
+  coolify:
+    # Use your custom image instead of the official one
+    image: ${CUSTOM_COOLIFY_IMAGE:-ghcr.io/your-username/coolify-granular-permissions:latest}
+    environment:
+      # Enable granular permissions
+      - COOLIFY_GRANULAR_PERMISSIONS=true

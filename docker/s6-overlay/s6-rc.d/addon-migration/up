@@ -1,0 +1,12 @@
+#!/command/execlineb -P
+
+# Run addon migrations after Coolify's main migrations
+with-contenv
+cd /var/www/html
+foreground {
+    php
+    artisan
+    migrate
+    --path=vendor/amirhmoradi/coolify-granular-permissions/database/migrations
+    --force
+}

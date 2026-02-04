@@ -1,0 +1,59 @@
+{
+    "name": "amirhmoradi/coolify-granular-permissions",
+    "description": "Granular user role and project-level access management for Coolify v4",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "coolify",
+        "permissions",
+        "access-control",
+        "rbac",
+        "laravel"
+    ],
+    "authors": [
+        {
+            "name": "Amir H. Moradi",
+            "email": "amir@example.com"
+        }
+    ],
+    "homepage": "https://github.com/amirhmoradi/coolify-granular-permissions",
+    "support": {
+        "issues": "https://github.com/amirhmoradi/coolify-granular-permissions/issues",
+        "source": "https://github.com/amirhmoradi/coolify-granular-permissions"
+    },
+    "autoload": {
+        "psr-4": {
+            "AmirhMoradi\\CoolifyPermissions\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AmirhMoradi\\CoolifyPermissions\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AmirhMoradi\\CoolifyPermissions\\CoolifyPermissionsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/database": "^11.0|^12.0",
+        "livewire/livewire": "^3.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0",
+        "pestphp/pest": "^2.0"
+    },
+    "scripts": {
+        "test": "pest"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
