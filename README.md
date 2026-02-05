@@ -224,6 +224,43 @@ docker build \
   .
 ```
 
+## Reverting to Original Coolify
+
+You can safely revert to the original Coolify image at any time. **Reverting is non-destructive** - your projects, users, and data remain intact.
+
+### Quick Revert
+
+```bash
+cd /data/coolify/source
+
+# If using docker-compose.override.yml (recommended method)
+rm docker-compose.override.yml
+
+# Remove environment variable
+sed -i '/COOLIFY_GRANULAR_PERMISSIONS/d' .env
+
+# Restart with original image
+docker compose down && docker compose up -d
+```
+
+### What Happens After Reverting
+
+| Component | Status |
+|-----------|--------|
+| Core Coolify | ✅ Works normally |
+| Projects & deployments | ✅ Fully preserved |
+| Users & teams | ✅ Fully preserved |
+| Permission settings | ⚠️ Stored but not enforced |
+| Permission UI/API | ❌ Not available |
+
+All team members will have full access to all projects (standard Coolify v4 behavior).
+
+### Re-enabling Later
+
+Your permission data is preserved in the database. Simply reinstall the custom image and your settings will be restored.
+
+For detailed instructions including database cleanup options, see the [Installation Guide](docs/installation.md#reverting-to-original-coolify).
+
 ## Migrating to Coolify v5
 
 When Coolify v5 releases with built-in granular permissions:

@@ -270,45 +270,193 @@ docker compose up -d
 
 ---
 
-## Uninstalling
+## Reverting to Original Coolify
 
-### 1. Disable Feature Flag
+You can safely revert to the original Coolify image at any time. This section explains the impact and provides step-by-step instructions.
+
+### Why Reverting is Safe
+
+This package is designed to be **non-destructive**:
+
+1. **No core file modifications** - The package extends Coolify via Laravel's service provider system without patching any core files
+2. **Database tables are isolated** - Extra tables (`project_user`, `environment_user`) are simply ignored by the original Coolify
+3. **Extra columns are ignored** - Laravel's Eloquent ORM only reads columns defined in its models; additional columns on the `users` table won't cause errors
+4. **Feature flag design** - You can disable permissions without removing the package
+
+### Impact Analysis
+
+| Component | After Reverting | Notes |
+|-----------|-----------------|-------|
+| Core Coolify functionality | ✅ **Works normally** | No impact whatsoever |
+| Projects, resources, deployments | ✅ **Fully preserved** | All your data remains intact |
+| Users and teams | ✅ **Fully preserved** | User accounts work as before |
+| Team roles (Owner, Admin, Member) | ✅ **Work normally** | Standard Coolify role behavior |
+| Granular permission settings | ⚠️ **Stored but not enforced** | Data remains in DB tables |
+| Permission UI (Access tabs) | ❌ **Not available** | UI components not in original image |
+| User Management admin page | ❌ **Not available** | Admin features not in original image |
+| Permission API endpoints | ❌ **Not available** | API routes not registered |
+
+**Key point:** All team members will have full access to all projects (standard Coolify v4 behavior) after reverting.
+
+---
+
+### Revert Instructions
+
+#### Option A: Quick Disable (Keep Package Installed)
+
+If you want to temporarily disable granular permissions while keeping the custom image:
 
 ```bash
 # Edit /data/coolify/source/.env
+# Change to:
 COOLIFY_GRANULAR_PERMISSIONS=false
+
+# Restart Coolify
+cd /data/coolify/source
+docker compose restart coolify
 ```
 
-### 2. Restore Original Image
+**Result:** Package remains installed but permissions are not enforced. All users get full access.
 
-Edit `docker-compose.override.yml` or `docker-compose.prod.yml`:
+---
 
-```yaml
-services:
-  coolify:
-    image: "ghcr.io/coollabsio/coolify:latest"
-```
+#### Option B: Full Revert (Return to Original Image)
 
-Or delete `docker-compose.override.yml` entirely.
-
-### 3. Restart
+##### If using docker-compose.override.yml (Recommended method)
 
 ```bash
 cd /data/coolify/source
+
+# Option 1: Delete the override file entirely
+rm docker-compose.override.yml
+
+# Option 2: Or edit it to use original image
+cat > docker-compose.override.yml << 'EOF'
+services:
+  coolify:
+    image: "ghcr.io/coollabsio/coolify:latest"
+EOF
+
+# Remove the environment variable (optional but recommended)
+sed -i '/COOLIFY_GRANULAR_PERMISSIONS/d' .env
+
+# Restart Coolify
 docker compose down
 docker compose up -d
 ```
 
-### 4. (Optional) Remove Database Tables
+##### If using modified docker-compose.prod.yml
 
-Connect to the database and drop tables:
+```bash
+cd /data/coolify/source
+
+# Edit docker-compose.prod.yml and change:
+#   image: "ghcr.io/amirhmoradi/coolify-granular-permissions:latest"
+# Back to:
+#   image: "ghcr.io/coollabsio/coolify:${LATEST_IMAGE:-latest}"
+
+# Also remove the COOLIFY_GRANULAR_PERMISSIONS environment variable
+
+# Remove from .env as well
+sed -i '/COOLIFY_GRANULAR_PERMISSIONS/d' .env
+
+# Restart Coolify
+docker compose down
+docker compose up -d
+```
+
+##### If using self-built local image
+
+```bash
+cd /data/coolify/source
+
+# Update your docker-compose to use original image:
+#   image: "ghcr.io/coollabsio/coolify:latest"
+
+# Remove environment variable
+sed -i '/COOLIFY_GRANULAR_PERMISSIONS/d' .env
+
+# Restart
+docker compose down
+docker compose up -d
+```
+
+---
+
+### Verify Revert Was Successful
+
+```bash
+# Check which image is running
+docker inspect coolify --format='{{.Config.Image}}'
+# Should show: ghcr.io/coollabsio/coolify:latest (or similar)
+
+# Verify Coolify is working
+docker logs coolify --tail 50
+```
+
+---
+
+### Database Cleanup (Optional)
+
+The package's database tables will remain after reverting but cause no harm. If you want to completely remove them:
+
+#### Option 1: Using Artisan (if custom image is still running)
+
+Before reverting, run the migration rollback:
+
+```bash
+docker exec coolify php artisan migrate:rollback \
+  --path=vendor/amirhmoradi/coolify-granular-permissions/database/migrations
+```
+
+#### Option 2: Direct SQL (after reverting)
+
+Connect to your Coolify database and execute:
 
 ```sql
+-- Remove package tables
 DROP TABLE IF EXISTS environment_user;
 DROP TABLE IF EXISTS project_user;
+
+-- Remove added columns from users table
 ALTER TABLE users DROP COLUMN IF EXISTS is_global_admin;
 ALTER TABLE users DROP COLUMN IF EXISTS status;
 ```
+
+**How to connect to the database:**
+
+```bash
+# If using Coolify's bundled PostgreSQL
+docker exec -it coolify-db psql -U coolify -d coolify
+
+# Or check your .env for database credentials
+grep DB_ /data/coolify/source/.env
+```
+
+---
+
+### Re-enabling Later
+
+If you revert and later decide to use granular permissions again:
+
+1. **Your permission data is preserved** (if you didn't run database cleanup)
+2. Simply follow the [Quick Start](#quick-start-recommended) installation again
+3. All previously configured project access settings will be restored
+
+---
+
+### Comparison: Disable vs Full Revert
+
+| Action | Disable Feature Flag | Full Revert |
+|--------|---------------------|-------------|
+| Permissions enforced | No | No |
+| Custom UI available | Yes (shows "disabled" state) | No |
+| Permission data preserved | Yes | Yes (unless cleaned) |
+| Can re-enable quickly | Yes (change env var) | Yes (reinstall image) |
+| Disk space | Uses custom image | Uses original image |
+| Coolify updates | Manual (rebuild image) | Automatic |
+
+**Recommendation:** Use "Disable Feature Flag" for temporary testing. Use "Full Revert" if you've decided not to use the package.
 
 ---
 
