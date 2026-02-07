@@ -33,8 +33,8 @@ class AccessMatrix extends Component
 
         $bypassRoles = config('coolify-permissions.bypass_roles', ['owner', 'admin']);
 
-        // Load team members
-        $this->users = $team->members->map(function ($user) use ($team, $bypassRoles) {
+        // Load team members via relationship (includes pivot with role)
+        $this->users = $team->members->map(function ($user) use ($bypassRoles) {
             $role = $user->pivot->role ?? 'member';
 
             return [
@@ -63,19 +63,25 @@ class AccessMatrix extends Component
 
         // Load all project permissions in bulk
         $projectIds = collect($this->projects)->pluck('id')->toArray();
-        $projectPerms = DB::table('project_user')
-            ->whereIn('project_id', $projectIds)
-            ->get()
-            ->groupBy('user_id');
+        $projectPerms = collect();
+        if (! empty($projectIds)) {
+            $projectPerms = DB::table('project_user')
+                ->whereIn('project_id', $projectIds)
+                ->get()
+                ->groupBy('user_id');
+        }
 
         // Load all environment permissions in bulk
         $envIds = collect($this->projects)->flatMap(function ($p) {
             return collect($p['environments'])->pluck('id');
         })->toArray();
-        $envPerms = DB::table('environment_user')
-            ->whereIn('environment_id', $envIds)
-            ->get()
-            ->groupBy('user_id');
+        $envPerms = collect();
+        if (! empty($envIds)) {
+            $envPerms = DB::table('environment_user')
+                ->whereIn('environment_id', $envIds)
+                ->get()
+                ->groupBy('user_id');
+        }
 
         // Build permissions matrix
         $this->permissions = [];
@@ -147,6 +153,9 @@ class AccessMatrix extends Component
 
     /**
      * Update an environment-level permission override for a user.
+     *
+     * "inherited" removes the override so the project level cascades down.
+     * Any other level sets an explicit environment override.
      */
     public function updateEnvironmentPermission(int $userId, int $envId, string $level): void
     {
@@ -156,13 +165,10 @@ class AccessMatrix extends Component
         $environment = \App\Models\Environment::findOrFail($envId);
 
         if ($level === 'inherited') {
+            // Remove the override — permission will cascade from project
             PermissionService::revokeEnvironmentAccess($user, $environment);
         } else {
-            PermissionService::grantEnvironmentAccess($user, $environment, $level === 'none' ? 'view_only' : $level);
-            if ($level === 'none') {
-                // For "none" at env level, revoke the override entirely
-                PermissionService::revokeEnvironmentAccess($user, $environment);
-            }
+            PermissionService::grantEnvironmentAccess($user, $environment, $level);
         }
 
         $this->permissions[$userId]["e_{$envId}"] = $level;
@@ -207,6 +213,8 @@ class AccessMatrix extends Component
      */
     public function setAllForProject(int $projectId, string $level): void
     {
+        $this->authorizeAdmin();
+
         $project = \App\Models\Project::findOrFail($projectId);
 
         foreach ($this->users as $user) {
@@ -234,6 +242,8 @@ class AccessMatrix extends Component
      */
     public function setAllForEnvironment(int $envId, string $level): void
     {
+        $this->authorizeAdmin();
+
         $environment = \App\Models\Environment::findOrFail($envId);
 
         foreach ($this->users as $user) {
@@ -249,10 +259,7 @@ class AccessMatrix extends Component
             if ($level === 'inherited') {
                 PermissionService::revokeEnvironmentAccess($userModel, $environment);
             } else {
-                PermissionService::grantEnvironmentAccess($userModel, $environment, $level === 'none' ? 'view_only' : $level);
-                if ($level === 'none') {
-                    PermissionService::revokeEnvironmentAccess($userModel, $environment);
-                }
+                PermissionService::grantEnvironmentAccess($userModel, $environment, $level);
             }
         }
 

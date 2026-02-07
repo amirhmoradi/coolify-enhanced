@@ -52,9 +52,6 @@ class CoolifyPermissionsServiceProvider extends ServiceProvider
 
         // Override policies with permission-aware versions
         $this->registerPolicies();
-
-        // Register model traits dynamically
-        $this->extendUserModel();
     }
 
     /**
@@ -100,36 +97,5 @@ class CoolifyPermissionsServiceProvider extends ServiceProvider
                 Gate::policy($model, $policy);
             }
         }
-    }
-
-    /**
-     * Extend the User model with permission traits at runtime.
-     */
-    protected function extendUserModel(): void
-    {
-        // Register a macro to check project permissions
-        \App\Models\User::macro('hasProjectPermission', function ($project, string $permission): bool {
-            return \AmirhMoradi\CoolifyPermissions\Services\PermissionService::hasProjectPermission($this, $project, $permission);
-        });
-
-        \App\Models\User::macro('hasEnvironmentPermission', function ($environment, string $permission): bool {
-            return \AmirhMoradi\CoolifyPermissions\Services\PermissionService::hasEnvironmentPermission($this, $environment, $permission);
-        });
-
-        \App\Models\User::macro('canPerform', function (string $action, $resource): bool {
-            return \AmirhMoradi\CoolifyPermissions\Services\PermissionService::canPerform($this, $action, $resource);
-        });
-
-        \App\Models\User::macro('getProjectAccess', function ($project) {
-            return \AmirhMoradi\CoolifyPermissions\Models\ProjectUser::where('project_id', $project->id)
-                ->where('user_id', $this->id)
-                ->first();
-        });
-
-        \App\Models\User::macro('getEnvironmentAccess', function ($environment) {
-            return \AmirhMoradi\CoolifyPermissions\Models\EnvironmentUser::where('environment_id', $environment->id)
-                ->where('user_id', $this->id)
-                ->first();
-        });
     }
 }

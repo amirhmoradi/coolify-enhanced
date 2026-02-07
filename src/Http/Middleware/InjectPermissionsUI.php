@@ -46,8 +46,8 @@ class InjectPermissionsUI
      */
     protected function shouldInject(Request $request, Response $response): bool
     {
-        // Only inject on team admin page
-        if (! $request->is('team') && ! $request->is('team/*')) {
+        // Only inject on the team admin page (/team/admin route)
+        if (! $request->routeIs('team.admin-view')) {
             return false;
         }
 
@@ -91,6 +91,19 @@ class InjectPermissionsUI
 
     /**
      * Wrap the rendered component with a container and positioning script.
+     *
+     * Coolify's layout structure:
+     *   <main class="lg:pl-56">
+     *     <div class="p-4 sm:px-6 lg:px-8 lg:py-6">
+     *       <div> <!-- Livewire component root (admin-view) -->
+     *         <x-team.navbar />
+     *         <h2>Admin View</h2>
+     *         ...content...
+     *       </div>
+     *     </div>
+     *   </main>
+     *
+     * We append our section inside the Livewire component root div.
      */
     protected function wrapWithInjector(string $componentHtml): string
     {
@@ -100,46 +113,53 @@ class InjectPermissionsUI
 <div id="granular-permissions-inject" style="display:none;">
     {$componentHtml}
 </div>
-<script>
+<script data-navigate-once>
 (function() {
     function positionPermissionsUI() {
         var wrapper = document.getElementById('granular-permissions-inject');
-        if (!wrapper) return;
+        if (!wrapper || wrapper.dataset.positioned === 'true') return;
 
-        // Try to find the main content area on the team/admin page
-        var target = null;
-        var selectors = [
-            'main [x-data] > div:last-child',
-            'main .container > div:last-child',
-            'main > div > div > div:last-child',
-            'main > div > div:last-child',
-            'main > div:last-child',
-            'main'
-        ];
+        // Target: the Livewire admin-view component root div inside main content
+        // Coolify structure: main.lg\\:pl-56 > div.p-4 > div (livewire root)
+        var target = document.querySelector('main > div > div > div:first-child');
 
-        for (var i = 0; i < selectors.length; i++) {
-            target = document.querySelector(selectors[i]);
-            if (target && target !== wrapper && !target.contains(wrapper)) break;
-            target = null;
+        // Fallback: find the div containing "Admin View" heading
+        if (!target) {
+            var headings = document.querySelectorAll('h2');
+            for (var i = 0; i < headings.length; i++) {
+                if (headings[i].textContent.trim() === 'Admin View') {
+                    target = headings[i].closest('div');
+                    break;
+                }
+            }
         }
 
-        if (target) {
+        // Final fallback: main content padding div
+        if (!target) {
+            target = document.querySelector('main > div');
+        }
+
+        if (target && target !== wrapper) {
             target.appendChild(wrapper);
+            wrapper.dataset.positioned = 'true';
         }
 
         wrapper.style.display = 'block';
     }
 
-    // Position on initial load
+    // Run after DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', positionPermissionsUI);
     } else {
         positionPermissionsUI();
     }
 
-    // Re-position after Livewire navigation (wire:navigate)
+    // Re-run after Livewire SPA navigation (wire:navigate)
     document.addEventListener('livewire:navigated', function() {
-        setTimeout(positionPermissionsUI, 100);
+        // Reset positioned flag since DOM was replaced
+        var wrapper = document.getElementById('granular-permissions-inject');
+        if (wrapper) wrapper.dataset.positioned = '';
+        setTimeout(positionPermissionsUI, 50);
     });
 })();
 </script>
