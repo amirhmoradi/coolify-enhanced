@@ -130,7 +130,7 @@ class AccessMatrix extends Component
      */
     public function updateProjectPermission(int $userId, int $projectId, string $level): void
     {
-        $this->authorize($userId);
+        $this->authorizeAdmin();
 
         $user = User::findOrFail($userId);
         $project = \App\Models\Project::findOrFail($projectId);
@@ -150,7 +150,7 @@ class AccessMatrix extends Component
      */
     public function updateEnvironmentPermission(int $userId, int $envId, string $level): void
     {
-        $this->authorize($userId);
+        $this->authorizeAdmin();
 
         $user = User::findOrFail($userId);
         $environment = \App\Models\Environment::findOrFail($envId);
@@ -174,7 +174,7 @@ class AccessMatrix extends Component
      */
     public function setAllForUser(int $userId, string $level): void
     {
-        $this->authorize($userId);
+        $this->authorizeAdmin();
 
         $user = User::findOrFail($userId);
 
@@ -294,7 +294,7 @@ class AccessMatrix extends Component
     /**
      * Verify the current user can manage permissions.
      */
-    protected function authorize(int $targetUserId): void
+    protected function authorizeAdmin(): void
     {
         $currentUser = auth()->user();
         if (! PermissionService::hasRoleBypass($currentUser)) {
