@@ -49,8 +49,8 @@ coolify-granular-permissions/
 | `config/coolify-permissions.php` | Configuration options |
 | `docker/Dockerfile` | Custom Coolify image build |
 | `docker/docker-compose.custom.yml` | Compose override template |
-| `install.sh` | Automated install script |
-| `uninstall.sh` | Automated uninstall script |
+| `install.sh` | Setup script (menu + CLI args) |
+| `uninstall.sh` | Standalone uninstall script |
 
 ### Development Commands
 
@@ -59,10 +59,23 @@ coolify-granular-permissions/
 # Build custom image
 docker build --build-arg COOLIFY_VERSION=latest -t coolify-custom:latest -f docker/Dockerfile .
 
-# Install on Coolify server
+# Setup menu (interactive)
 sudo bash install.sh
 
-# Uninstall
+# Install Coolify on a fresh server
+sudo bash install.sh --install-coolify
+
+# Install the permissions addon
+sudo bash install.sh --install-addon
+
+# Full setup (Coolify + addon) non-interactive
+sudo bash install.sh --install-coolify --install-addon --unattended
+
+# Check installation status
+sudo bash install.sh --status
+
+# Uninstall addon (via menu or standalone)
+sudo bash install.sh --uninstall
 sudo bash uninstall.sh
 ```
 
