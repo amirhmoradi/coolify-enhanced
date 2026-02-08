@@ -3,6 +3,8 @@
 namespace AmirhMoradi\CoolifyPermissions;
 
 use AmirhMoradi\CoolifyPermissions\Http\Middleware\InjectPermissionsUI;
+use AmirhMoradi\CoolifyPermissions\Scopes\EnvironmentPermissionScope;
+use AmirhMoradi\CoolifyPermissions\Scopes\ProjectPermissionScope;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -50,6 +52,9 @@ class CoolifyPermissionsServiceProvider extends ServiceProvider
             __DIR__.'/../resources/views' => resource_path('views/vendor/coolify-permissions'),
         ], 'coolify-permissions-views');
 
+        // Register global scopes to filter resources based on permissions
+        $this->registerScopes();
+
         // Override policies with permission-aware versions
         $this->registerPolicies();
     }
@@ -72,6 +77,21 @@ class CoolifyPermissionsServiceProvider extends ServiceProvider
     {
         $kernel = $this->app->make(Kernel::class);
         $kernel->pushMiddleware(InjectPermissionsUI::class);
+    }
+
+    /**
+     * Register Eloquent global scopes to filter projects and environments
+     * based on the authenticated user's permissions.
+     */
+    protected function registerScopes(): void
+    {
+        if (class_exists(\App\Models\Project::class)) {
+            \App\Models\Project::addGlobalScope(new ProjectPermissionScope);
+        }
+
+        if (class_exists(\App\Models\Environment::class)) {
+            \App\Models\Environment::addGlobalScope(new EnvironmentPermissionScope);
+        }
     }
 
     /**

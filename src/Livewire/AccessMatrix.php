@@ -14,8 +14,12 @@ class AccessMatrix extends Component
     public array $users = [];
     public array $projects = [];
     public array $permissions = [];
+    public array $originalPermissions = [];
+    public bool $hasPendingChanges = false;
     public string $search = '';
     public string $bulkLevel = 'full_access';
+    public string $saveMessage = '';
+    public string $saveStatus = ''; // 'success' or 'error'
 
     protected $listeners = ['refreshAccessMatrix' => 'loadMatrix'];
 
@@ -46,7 +50,7 @@ class AccessMatrix extends Component
             ];
         })->sortBy('name')->values()->toArray();
 
-        // Load projects with environments
+        // Load projects with environments (admin bypasses global scopes)
         $this->projects = $team->projects()->with('environments')->get()->map(function ($project) {
             return [
                 'id' => $project->id,
@@ -106,6 +110,11 @@ class AccessMatrix extends Component
                 }
             }
         }
+
+        $this->originalPermissions = $this->permissions;
+        $this->hasPendingChanges = false;
+        $this->saveMessage = '';
+        $this->saveStatus = '';
     }
 
     /**
@@ -132,155 +141,177 @@ class AccessMatrix extends Component
     }
 
     /**
-     * Update a project-level permission for a user.
+     * Update a project-level permission locally (no DB write until save).
      */
     public function updateProjectPermission(int $userId, int $projectId, string $level): void
     {
         $this->authorizeAdmin();
-
-        $user = User::findOrFail($userId);
-        $project = \App\Models\Project::findOrFail($projectId);
-
-        if ($level === 'none') {
-            PermissionService::revokeProjectAccess($user, $project);
-        } else {
-            PermissionService::grantProjectAccess($user, $project, $level);
-        }
-
         $this->permissions[$userId]["p_{$projectId}"] = $level;
-        $this->dispatch('permissionUpdated');
+        $this->checkForChanges();
     }
 
     /**
-     * Update an environment-level permission override for a user.
+     * Update an environment-level permission locally (no DB write until save).
      *
-     * "inherited" removes the override so the project level cascades down.
-     * "none" sets an explicit override with all permissions false (hides environment).
-     * Any other level sets an explicit environment override.
+     * "inherited" = cascade from project level.
+     * "none" = explicit block (user can't see the environment).
      */
     public function updateEnvironmentPermission(int $userId, int $envId, string $level): void
     {
         $this->authorizeAdmin();
-
-        $user = User::findOrFail($userId);
-        $environment = \App\Models\Environment::findOrFail($envId);
-
-        if ($level === 'inherited') {
-            // Remove the override — permission will cascade from project
-            PermissionService::revokeEnvironmentAccess($user, $environment);
-        } else {
-            // "none" stores an explicit override with all permissions false
-            PermissionService::grantEnvironmentAccess($user, $environment, $level);
-        }
-
         $this->permissions[$userId]["e_{$envId}"] = $level;
-        $this->dispatch('permissionUpdated');
+        $this->checkForChanges();
     }
 
     /**
-     * Set all project+environment permissions for a single user.
+     * Set all project+environment permissions for a single user (local only).
      */
     public function setAllForUser(int $userId, string $level): void
     {
         $this->authorizeAdmin();
 
-        $user = User::findOrFail($userId);
-
         foreach ($this->projects as $project) {
-            $proj = \App\Models\Project::find($project['id']);
-            if (! $proj) {
-                continue;
-            }
-
-            if ($level === 'none') {
-                PermissionService::revokeProjectAccess($user, $proj);
-            } else {
-                PermissionService::grantProjectAccess($user, $proj, $level);
-            }
-
+            $this->permissions[$userId]["p_{$project['id']}"] = $level;
             // Reset all environment overrides to inherited
             foreach ($project['environments'] as $env) {
-                $environment = \App\Models\Environment::find($env['id']);
-                if ($environment) {
-                    PermissionService::revokeEnvironmentAccess($user, $environment);
-                }
+                $this->permissions[$userId]["e_{$env['id']}"] = 'inherited';
             }
         }
 
-        $this->loadMatrix();
+        $this->checkForChanges();
     }
 
     /**
-     * Set a permission level for all users on a specific project.
+     * Set a permission level for all users on a specific project (local only).
      */
     public function setAllForProject(int $projectId, string $level): void
     {
         $this->authorizeAdmin();
 
-        $project = \App\Models\Project::findOrFail($projectId);
-
         foreach ($this->users as $user) {
             if ($user['bypass']) {
                 continue;
             }
-
-            $userModel = User::find($user['id']);
-            if (! $userModel) {
-                continue;
-            }
-
-            if ($level === 'none') {
-                PermissionService::revokeProjectAccess($userModel, $project);
-            } else {
-                PermissionService::grantProjectAccess($userModel, $project, $level);
-            }
+            $this->permissions[$user['id']]["p_{$projectId}"] = $level;
         }
 
-        $this->loadMatrix();
+        $this->checkForChanges();
     }
 
     /**
-     * Set a permission level for all users on a specific environment.
+     * Set a permission level for all users on a specific environment (local only).
      */
     public function setAllForEnvironment(int $envId, string $level): void
     {
         $this->authorizeAdmin();
 
-        $environment = \App\Models\Environment::findOrFail($envId);
-
         foreach ($this->users as $user) {
             if ($user['bypass']) {
                 continue;
             }
-
-            $userModel = User::find($user['id']);
-            if (! $userModel) {
-                continue;
-            }
-
-            if ($level === 'inherited') {
-                PermissionService::revokeEnvironmentAccess($userModel, $environment);
-            } else {
-                // "none" stores explicit override with all permissions false
-                PermissionService::grantEnvironmentAccess($userModel, $environment, $level);
-            }
+            $this->permissions[$user['id']]["e_{$envId}"] = $level;
         }
 
-        $this->loadMatrix();
+        $this->checkForChanges();
     }
 
     /**
-     * Get the effective permission for an environment cell (resolves inheritance).
+     * Persist all pending permission changes to the database.
      */
-    public function getEffectiveLevel(int $userId, int $envId, int $projectId): string
+    public function saveChanges(): void
     {
-        $envLevel = $this->permissions[$userId]["e_{$envId}"] ?? 'inherited';
+        $this->authorizeAdmin();
+        $this->saveMessage = '';
+        $this->saveStatus = '';
 
-        if ($envLevel !== 'inherited') {
-            return $envLevel;
+        $changeCount = 0;
+
+        try {
+            DB::beginTransaction();
+
+            foreach ($this->users as $user) {
+                if ($user['bypass']) {
+                    continue;
+                }
+
+                $userId = $user['id'];
+                $userModel = null;
+
+                foreach ($this->projects as $project) {
+                    $pKey = "p_{$project['id']}";
+                    $newLevel = $this->permissions[$userId][$pKey] ?? 'none';
+                    $oldLevel = $this->originalPermissions[$userId][$pKey] ?? 'none';
+
+                    if ($newLevel !== $oldLevel) {
+                        $userModel = $userModel ?? User::find($userId);
+                        $proj = \App\Models\Project::withoutGlobalScopes()->find($project['id']);
+                        if ($userModel && $proj) {
+                            if ($newLevel === 'none') {
+                                PermissionService::revokeProjectAccess($userModel, $proj);
+                            } else {
+                                PermissionService::grantProjectAccess($userModel, $proj, $newLevel);
+                            }
+                            $changeCount++;
+                        }
+                    }
+
+                    foreach ($project['environments'] as $env) {
+                        $eKey = "e_{$env['id']}";
+                        $newEnvLevel = $this->permissions[$userId][$eKey] ?? 'inherited';
+                        $oldEnvLevel = $this->originalPermissions[$userId][$eKey] ?? 'inherited';
+
+                        if ($newEnvLevel !== $oldEnvLevel) {
+                            $userModel = $userModel ?? User::find($userId);
+                            $environment = \App\Models\Environment::withoutGlobalScopes()->find($env['id']);
+                            if ($userModel && $environment) {
+                                if ($newEnvLevel === 'inherited') {
+                                    PermissionService::revokeEnvironmentAccess($userModel, $environment);
+                                } else {
+                                    PermissionService::grantEnvironmentAccess($userModel, $environment, $newEnvLevel);
+                                }
+                                $changeCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            DB::commit();
+
+            $this->originalPermissions = $this->permissions;
+            $this->hasPendingChanges = false;
+            $this->saveMessage = "Saved {$changeCount} permission change(s) successfully.";
+            $this->saveStatus = 'success';
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+            $this->saveMessage = 'Failed to save permissions: '.$e->getMessage();
+            $this->saveStatus = 'error';
         }
+    }
 
-        return $this->permissions[$userId]["p_{$projectId}"] ?? 'none';
+    /**
+     * Discard all pending changes and revert to last saved state.
+     */
+    public function discardChanges(): void
+    {
+        $this->permissions = $this->originalPermissions;
+        $this->hasPendingChanges = false;
+        $this->saveMessage = '';
+        $this->saveStatus = '';
+    }
+
+    /**
+     * Compare current permissions with original to detect pending changes.
+     */
+    protected function checkForChanges(): void
+    {
+        $this->hasPendingChanges = $this->permissions !== $this->originalPermissions;
+        // Clear any previous save message when user makes new changes
+        if ($this->hasPendingChanges) {
+            $this->saveMessage = '';
+            $this->saveStatus = '';
+        }
     }
 
     /**

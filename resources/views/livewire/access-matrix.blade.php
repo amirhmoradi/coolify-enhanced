@@ -1,19 +1,66 @@
-<div>
+<div
+    x-data="{ hasPending: @entangle('hasPendingChanges') }"
+    x-on:beforeunload.window="if (hasPending) { $event.preventDefault(); $event.returnValue = ''; }"
+    x-init="
+        document.addEventListener('livewire:navigate', function(e) {
+            if (hasPending && !confirm('You have unsaved permission changes. Leave without saving?')) {
+                e.preventDefault();
+            }
+        });
+    "
+>
     {{-- Granular Permissions - Access Matrix --}}
     <div class="mt-10 pt-8 border-t border-neutral-200 dark:border-coolgray-300">
-        {{-- Header --}}
-        <div class="flex items-center justify-between mb-2">
-            <h2>Granular Access Management</h2>
-            @if(! config('coolify-permissions.enabled', false))
-                <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded border border-orange-300 dark:border-yellow-600 bg-orange-50 dark:bg-yellow-900/30 text-orange-700 dark:text-warning">
-                    Disabled
-                </span>
-            @else
-                <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-success">
-                    Active
-                </span>
-            @endif
+        {{-- Header row: title + status + save button --}}
+        <div class="flex items-center justify-between mb-2 gap-4">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <h2 class="truncate">Granular Access Management</h2>
+                @if(! config('coolify-permissions.enabled', false))
+                    <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded border border-orange-300 dark:border-yellow-600 bg-orange-50 dark:bg-yellow-900/30 text-orange-700 dark:text-warning shrink-0">
+                        Disabled
+                    </span>
+                @else
+                    <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-success shrink-0">
+                        Active
+                    </span>
+                @endif
+            </div>
+
+            {{-- Save / Discard buttons --}}
+            <div class="flex items-center gap-2 shrink-0">
+                @if($hasPendingChanges)
+                    <button
+                        wire:click="discardChanges"
+                        class="button px-3 py-1.5 text-xs !h-auto"
+                    >Discard</button>
+                    <button
+                        wire:click="saveChanges"
+                        class="button px-3 py-1.5 text-xs !h-auto"
+                        isHighlighted
+                    >Save Changes</button>
+                @endif
+            </div>
         </div>
+
+        {{-- Notification banner --}}
+        @if($saveMessage)
+            <div class="rounded border p-3 mb-4 text-sm flex items-center justify-between
+                {{ $saveStatus === 'success'
+                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                    : 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200' }}">
+                <span>{{ $saveMessage }}</span>
+                <button wire:click="$set('saveMessage', '')" class="ml-4 text-xs opacity-60 hover:opacity-100">&times;</button>
+            </div>
+        @endif
+
+        {{-- Pending changes indicator --}}
+        @if($hasPendingChanges)
+            <div class="rounded border border-amber-300 dark:border-yellow-700 bg-amber-50 dark:bg-yellow-900/20 p-3 mb-4 text-sm text-amber-800 dark:text-yellow-200 flex items-center gap-2">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                You have unsaved changes. Click <strong class="mx-1">Save Changes</strong> to apply.
+            </div>
+        @endif
+
         <div class="subtitle">
             Manage per-user access to projects and environments. Owners and Admins bypass all checks.
         </div>
@@ -42,7 +89,7 @@
                     <option value="full_access">Full Access</option>
                     <option value="deploy">Deploy</option>
                     <option value="view_only">View Only</option>
-                    <option value="none">None</option>
+                    <option value="none">No Access</option>
                 </select>
             </div>
         </div>
@@ -67,28 +114,30 @@
                                     User
                                 </th>
                                 <th class="sticky left-[200px] z-20 bg-neutral-50 dark:bg-coolgray-200 px-3 py-3 text-center text-xs font-medium uppercase tracking-wider min-w-[90px] border-r border-neutral-200 dark:border-coolgray-300" rowspan="2">
-                                    Role
+                                    Team Role
                                 </th>
                                 <th class="px-3 py-3 text-center text-xs font-medium uppercase tracking-wider min-w-[70px] border-r border-neutral-200 dark:border-coolgray-300" rowspan="2">
                                     Actions
                                 </th>
                                 @foreach($projects as $project)
                                     <th
-                                        class="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-wider border-r border-neutral-200 dark:border-coolgray-300 bg-neutral-100 dark:bg-coolgray-300"
+                                        class="px-2 py-2.5 text-center text-xs font-bold tracking-wider border-r border-neutral-200 dark:border-coolgray-300 bg-neutral-100 dark:bg-coolgray-300"
                                         colspan="{{ 1 + count($project['environments']) }}"
                                     >
-                                        <span class="truncate max-w-[160px] inline-block text-black dark:text-white" title="{{ $project['name'] }}">{{ $project['name'] }}</span>
+                                        <span class="truncate max-w-[200px] inline-block text-black dark:text-white" title="{{ $project['name'] }}">
+                                            Project: {{ $project['name'] }}
+                                        </span>
                                     </th>
                                 @endforeach
                             </tr>
 
-                            {{-- Header Row 2: Project + Environment sub-columns --}}
+                            {{-- Header Row 2: Project-level + Environment sub-columns --}}
                             <tr class="bg-neutral-50 dark:bg-coolgray-200 border-b border-neutral-200 dark:border-coolgray-300">
                                 @foreach($projects as $project)
-                                    {{-- Project column --}}
+                                    {{-- Project-level column --}}
                                     <th class="px-2 py-2 text-center border-r border-neutral-200 dark:border-coolgray-300 min-w-[120px]">
                                         <div class="flex flex-col items-center gap-1">
-                                            <span class="text-xs font-semibold text-coollabs dark:text-warning">Project</span>
+                                            <span class="text-xs font-semibold text-coollabs dark:text-warning">Project Level</span>
                                             <div class="flex gap-1">
                                                 <button
                                                     wire:click="setAllForProject({{ $project['id'] }}, bulkLevel)"
@@ -106,9 +155,9 @@
                                     </th>
                                     {{-- Environment columns --}}
                                     @foreach($project['environments'] as $env)
-                                        <th class="px-2 py-2 text-center border-r border-neutral-200 dark:border-coolgray-300 min-w-[140px]">
+                                        <th class="px-2 py-2 text-center border-r border-neutral-200 dark:border-coolgray-300 min-w-[150px]">
                                             <div class="flex flex-col items-center gap-1">
-                                                <span class="text-xs font-medium text-neutral-600 dark:text-neutral-400 truncate max-w-[110px]" title="{{ $env['name'] }}">{{ $env['name'] }}</span>
+                                                <span class="text-xs font-medium text-neutral-600 dark:text-neutral-400 truncate max-w-[130px]" title="{{ $env['name'] }}">Env: {{ $env['name'] }}</span>
                                                 <div class="flex gap-1">
                                                     <button
                                                         wire:click="setAllForEnvironment({{ $env['id'] }}, bulkLevel)"
@@ -144,7 +193,7 @@
                                         </div>
                                     </td>
 
-                                    {{-- Role cell (sticky) --}}
+                                    {{-- Team Role cell (sticky) --}}
                                     <td class="sticky left-[200px] z-10 bg-white dark:bg-coolgray-100 px-3 py-2.5 text-center border-r border-neutral-200 dark:border-coolgray-300">
                                         @php
                                             $roleBadge = match($user['role']) {
@@ -192,6 +241,8 @@
                                             @else
                                                 @php
                                                     $level = $permissions[$user['id']]['p_' . $project['id']] ?? 'none';
+                                                    $origLevel = $originalPermissions[$user['id']]['p_' . $project['id']] ?? 'none';
+                                                    $isChanged = $level !== $origLevel;
                                                     $selectColor = match($level) {
                                                         'full_access' => 'perm-select-full',
                                                         'deploy' => 'perm-select-deploy',
@@ -201,7 +252,7 @@
                                                 @endphp
                                                 <select
                                                     wire:change="updateProjectPermission({{ $user['id'] }}, {{ $project['id'] }}, $event.target.value)"
-                                                    class="perm-select {{ $selectColor }}"
+                                                    class="perm-select {{ $selectColor }} {{ $isChanged ? 'perm-select-dirty' : '' }}"
                                                 >
                                                     <option value="none" {{ $level === 'none' ? 'selected' : '' }}>No Access</option>
                                                     <option value="view_only" {{ $level === 'view_only' ? 'selected' : '' }}>View Only</option>
@@ -219,8 +270,11 @@
                                                 @else
                                                     @php
                                                         $envLevel = $permissions[$user['id']]['e_' . $env['id']] ?? 'inherited';
+                                                        $origEnvLevel = $originalPermissions[$user['id']]['e_' . $env['id']] ?? 'inherited';
+                                                        $isEnvChanged = $envLevel !== $origEnvLevel;
                                                         $projectLevel = $permissions[$user['id']]['p_' . $project['id']] ?? 'none';
                                                         $effectiveLevel = $envLevel !== 'inherited' ? $envLevel : $projectLevel;
+                                                        $effectiveLabel = ucwords(str_replace('_', ' ', $effectiveLevel === 'none' ? 'No Access' : $effectiveLevel));
                                                         $envSelectColor = match($envLevel) {
                                                             'full_access' => 'perm-select-full',
                                                             'deploy' => 'perm-select-deploy',
@@ -231,12 +285,10 @@
                                                     @endphp
                                                     <select
                                                         wire:change="updateEnvironmentPermission({{ $user['id'] }}, {{ $env['id'] }}, $event.target.value)"
-                                                        class="perm-select {{ $envSelectColor }}"
-                                                        title="{{ $envLevel === 'inherited' ? 'Inherited from project: ' . ucwords(str_replace('_', ' ', $projectLevel)) : '' }}"
+                                                        class="perm-select {{ $envSelectColor }} {{ $isEnvChanged ? 'perm-select-dirty' : '' }}"
+                                                        title="{{ $envLevel === 'inherited' ? 'Inherited from project level: ' . $effectiveLabel : '' }}"
                                                     >
-                                                        <option value="inherited" {{ $envLevel === 'inherited' ? 'selected' : '' }}>
-                                                            ↳ {{ ucwords(str_replace('_', ' ', $effectiveLevel === 'none' ? 'no access' : $effectiveLevel)) }}
-                                                        </option>
+                                                        <option value="inherited" {{ $envLevel === 'inherited' ? 'selected' : '' }}>↳ Inherit ({{ $effectiveLabel }})</option>
                                                         <option value="none" {{ $envLevel === 'none' ? 'selected' : '' }}>No Access</option>
                                                         <option value="view_only" {{ $envLevel === 'view_only' ? 'selected' : '' }}>View Only</option>
                                                         <option value="deploy" {{ $envLevel === 'deploy' ? 'selected' : '' }}>Deploy</option>
@@ -272,7 +324,7 @@
                     <span class="text-neutral-600 dark:text-neutral-400">No Access</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-sm border border-purple-400 dark:border-purple-500 bg-purple-100 dark:bg-purple-900/50"></span>
+                    <span class="w-3 h-3 rounded-sm border border-purple-400 dark:border-purple-500 bg-purple-100 dark:bg-purple-900/50 border-dashed"></span>
                     <span class="text-neutral-600 dark:text-neutral-400">Inherited</span>
                 </div>
             </div>
@@ -281,7 +333,8 @@
 
     {{-- Scoped styles for permission select dropdowns --}}
     <style data-navigate-once>
-        .perm-select {
+        /* --- Permission matrix select dropdowns --- */
+        #granular-permissions-inject .perm-select {
             display: block;
             width: 100%;
             padding: 0.25rem 1.5rem 0.25rem 0.5rem;
@@ -298,70 +351,78 @@
             background-size: 1.25em 1.25em;
             transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .perm-select:focus {
+        #granular-permissions-inject .perm-select:focus {
             outline: none;
             box-shadow: 0 0 0 2px rgba(107, 22, 237, 0.3);
         }
-        .dark .perm-select:focus {
+        .dark #granular-permissions-inject .perm-select:focus {
             box-shadow: 0 0 0 2px rgba(252, 212, 82, 0.3);
         }
 
+        /* Dirty (unsaved) indicator — left accent bar */
+        #granular-permissions-inject .perm-select-dirty {
+            box-shadow: inset 4px 0 0 #6b16ed;
+        }
+        .dark #granular-permissions-inject .perm-select-dirty {
+            box-shadow: inset 4px 0 0 #fcd452;
+        }
+
         /* Full Access - Green */
-        .perm-select-full {
+        #granular-permissions-inject .perm-select-full {
             background-color: #dcfce7;
             border-color: #4ade80;
             color: #166534;
         }
-        .dark .perm-select-full {
+        .dark #granular-permissions-inject .perm-select-full {
             background-color: rgba(22, 101, 52, 0.35);
             border-color: #22c55e;
             color: #86efac;
         }
 
         /* Deploy - Amber */
-        .perm-select-deploy {
+        #granular-permissions-inject .perm-select-deploy {
             background-color: #fef3c7;
             border-color: #fbbf24;
             color: #92400e;
         }
-        .dark .perm-select-deploy {
+        .dark #granular-permissions-inject .perm-select-deploy {
             background-color: rgba(146, 64, 14, 0.35);
             border-color: #f59e0b;
             color: #fcd34d;
         }
 
         /* View Only - Blue */
-        .perm-select-view {
+        #granular-permissions-inject .perm-select-view {
             background-color: #dbeafe;
             border-color: #60a5fa;
             color: #1e40af;
         }
-        .dark .perm-select-view {
+        .dark #granular-permissions-inject .perm-select-view {
             background-color: rgba(30, 64, 175, 0.35);
             border-color: #3b82f6;
             color: #93c5fd;
         }
 
-        /* No Access - Neutral/Red hint */
-        .perm-select-none {
+        /* No Access - Neutral */
+        #granular-permissions-inject .perm-select-none {
             background-color: #f5f5f5;
             border-color: #d4d4d4;
             color: #737373;
         }
-        .dark .perm-select-none {
+        .dark #granular-permissions-inject .perm-select-none {
             background-color: rgba(64, 64, 64, 0.3);
             border-color: #525252;
             color: #a3a3a3;
         }
 
         /* Inherited - Purple/Dashed */
-        .perm-select-inherited {
+        #granular-permissions-inject .perm-select-inherited {
             background-color: #f5f3ff;
             border-color: #c4b5fd;
             color: #6d28d9;
             border-style: dashed;
         }
-        .dark .perm-select-inherited {
+        .dark #granular-permissions-inject .perm-select-inherited {
             background-color: rgba(109, 40, 217, 0.15);
             border-color: #7c3aed;
             color: #c4b5fd;
