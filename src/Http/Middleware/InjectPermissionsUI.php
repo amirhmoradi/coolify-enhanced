@@ -115,9 +115,22 @@ class InjectPermissionsUI
 </div>
 <script data-navigate-once>
 (function() {
+    function isAdminPage() {
+        return window.location.pathname === '/team/admin';
+    }
+
     function positionPermissionsUI() {
         var wrapper = document.getElementById('granular-permissions-inject');
-        if (!wrapper || wrapper.dataset.positioned === 'true') return;
+        if (!wrapper) return;
+
+        // Only show on team admin page — hide on all other pages
+        if (!isAdminPage()) {
+            wrapper.style.display = 'none';
+            wrapper.dataset.positioned = '';
+            return;
+        }
+
+        if (wrapper.dataset.positioned === 'true') return;
 
         // Target: the Livewire admin-view component root div inside main content
         // Coolify structure: main.lg\\:pl-56 > div.p-4 > div (livewire root)
@@ -156,7 +169,6 @@ class InjectPermissionsUI
 
     // Re-run after Livewire SPA navigation (wire:navigate)
     document.addEventListener('livewire:navigated', function() {
-        // Reset positioned flag since DOM was replaced
         var wrapper = document.getElementById('granular-permissions-inject');
         if (wrapper) wrapper.dataset.positioned = '';
         setTimeout(positionPermissionsUI, 50);
