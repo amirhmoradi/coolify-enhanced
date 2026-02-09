@@ -48,6 +48,10 @@ COPY --chown=www-data:www-data src/Overrides/Livewire/Project/Database/Import.ph
 COPY --chown=www-data:www-data src/Overrides/Helpers/databases.php \
     /var/www/html/bootstrap/helpers/databases.php
 
+# Override storage show view to include encryption form natively
+COPY --chown=www-data:www-data src/Overrides/Views/livewire/storage/show.blade.php \
+    /var/www/html/resources/views/livewire/storage/show.blade.php
+
 # Copy the s6-overlay script for addon migrations
 COPY --chmod=755 docker/s6-overlay/s6-rc.d/addon-migration/ /etc/s6-overlay/s6-rc.d/addon-migration/
 
