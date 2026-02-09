@@ -117,6 +117,8 @@ coolify-enhanced/
 │   │   │   └── DatabaseBackupJob.php          # Encryption-aware backup job
 │   │   ├── Livewire/Project/Database/
 │   │   │   └── Import.php                     # Encryption-aware restore
+│   │   ├── Views/livewire/storage/
+│   │   │   └── show.blade.php                 # Storage page with encryption form
 │   │   └── Helpers/
 │   │       └── databases.php                  # Encryption-aware S3 delete
 │   ├── Http/
@@ -153,7 +155,8 @@ coolify-enhanced/
 | `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption-aware backup job overlay |
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
-| `src/Http/Middleware/InjectPermissionsUI.php` | Injects UI into Coolify pages |
+| `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
+| `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix into team admin page |
 | `src/Models/ProjectUser.php` | Permission levels and helpers |
 | `config/coolify-enhanced.php` | Configuration options |
 | `docs/coolify-source/` | Coolify source reference (gitignored) |
@@ -209,13 +212,14 @@ Owners and Admins bypass all permission checks. Only Members and Viewers need ex
 - New resource: `/project/{uuid}/{env_name}/new`
 - Application: `/project/{uuid}/{env_name}/application/{app_uuid}`
 
-### UI Injection
+### UI Integration
 
-The middleware injects UI components into existing Coolify pages:
-- **Access Matrix** — injected into `/team/admin` page (for admin/owner users)
-- **Storage Encryption Form** — injected into `/storages/{uuid}` page
+Two approaches are used to add UI components to Coolify pages:
 
-No standalone web routes exist — the UI is always part of the existing Coolify page.
+- **Access Matrix** — injected via middleware into `/team/admin` page (for admin/owner users). Uses `Blade::render()` + JavaScript DOM positioning.
+- **Storage Encryption Form** — added via view overlay (`src/Overrides/Views/livewire/storage/show.blade.php`). The overlay adds `@livewire('enhanced::storage-encryption-form')` directly in the Blade template, ensuring proper Livewire hydration.
+
+**Why two approaches?** The access matrix is read-only (no interactive Livewire bindings needed), so middleware injection works fine. The encryption form has interactive toggles and form inputs that require proper Livewire hydration — middleware injection + DOM moves break Alpine.js/Livewire bindings. The view overlay renders the component natively in the page lifecycle.
 
 ## Common Pitfalls
 
@@ -229,6 +233,7 @@ No standalone web routes exist — the UI is always part of the existing Coolify
 8. **Rclone password obscuring** — Uses AES-256-CTR with a well-known fixed key from rclone source. The PHP implementation must match exactly (base64url encoding, no padding).
 9. **Env file cleanup** — Always clean up the base64-encoded env file and rclone container after operations to avoid credential leaks.
 10. **Filename encryption and S3 operations** — When `filename_encryption != 'off'`, S3 filenames are encrypted; must use rclone (not Laravel Storage) for listing/deleting files.
+11. **Middleware injection breaks Livewire interactivity** — Components rendered via `Blade::render()` in middleware and moved via JavaScript `appendChild()` lose Livewire/Alpine.js bindings. Use view overlays for interactive components (toggles, forms, buttons).
 
 ## Important Notes
 
