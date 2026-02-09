@@ -56,11 +56,22 @@ class CoolifyPermissionsServiceProvider extends ServiceProvider
         // Register global scopes to filter resources based on permissions
         $this->registerScopes();
 
-        // Override policies with permission-aware versions
-        $this->registerPolicies();
-
-        // Extend User model with permission-checking macros
-        $this->registerUserMacros();
+        // Defer policy registration to AFTER all service providers have booted.
+        //
+        // Laravel boots package providers BEFORE application providers.
+        // Coolify's AuthServiceProvider (an app provider) registers its own
+        // policies via its $policies property, which calls Gate::policy()
+        // internally. If we register policies during our boot(), Coolify's
+        // AuthServiceProvider boots afterwards and overwrites our policies
+        // with its permissive defaults (all return true).
+        //
+        // By deferring to the 'booted' callback, our Gate::policy() calls
+        // execute after ALL providers have booted, ensuring we get the last
+        // word and our permission-aware policies take effect.
+        $this->app->booted(function () {
+            $this->registerPolicies();
+            $this->registerUserMacros();
+        });
     }
 
     /**
