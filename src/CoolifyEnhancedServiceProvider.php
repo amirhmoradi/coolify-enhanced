@@ -157,6 +157,7 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
      *
      * Adds encrypted casts for encryption_password and encryption_salt columns
      * so they are stored encrypted at rest in the database (like key/secret).
+     * Also adds boolean casts for encryption_enabled and directory_name_encryption.
      */
     protected function extendS3StorageModel(): void
     {
@@ -164,14 +165,22 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
             return;
         }
 
-        // Add encrypted casts for the new encryption fields
-        // S3Storage already uses 'encrypted' cast for key and secret
-        \App\Models\S3Storage::resolveRelationUsing('_enhancedInit', function ($model) {
-            return null;
+        $encryptionCasts = [
+            'encryption_enabled' => 'boolean',
+            'encryption_password' => 'encrypted',
+            'encryption_salt' => 'encrypted',
+            'directory_name_encryption' => 'boolean',
+        ];
+
+        // Add casts when models are retrieved from database
+        \App\Models\S3Storage::retrieved(function (\App\Models\S3Storage $storage) use ($encryptionCasts) {
+            $storage->mergeCasts($encryptionCasts);
         });
 
-        // Use the saving event to ensure encryption fields are properly handled
-        \App\Models\S3Storage::saving(function (\App\Models\S3Storage $storage) {
+        // Add casts before saving so encrypted cast encrypts the values
+        \App\Models\S3Storage::saving(function (\App\Models\S3Storage $storage) use ($encryptionCasts) {
+            $storage->mergeCasts($encryptionCasts);
+
             // Trim encryption password whitespace (same pattern as key/secret)
             if ($storage->encryption_password !== null) {
                 $storage->encryption_password = trim($storage->encryption_password);

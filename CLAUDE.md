@@ -234,6 +234,8 @@ Two approaches are used to add UI components to Coolify pages:
 9. **Env file cleanup** — Always clean up the base64-encoded env file and rclone container after operations to avoid credential leaks.
 10. **Filename encryption and S3 operations** — When `filename_encryption != 'off'`, S3 filenames are encrypted; must use rclone (not Laravel Storage) for listing/deleting files.
 11. **Middleware injection breaks Livewire interactivity** — Components rendered via `Blade::render()` in middleware and moved via JavaScript `appendChild()` lose Livewire/Alpine.js bindings. Use view overlays for interactive components (toggles, forms, buttons).
+12. **Use Coolify's native form components** — Custom Tailwind CSS classes (e.g., `peer-checked:bg-blue-600`, `after:content-['']`) are NOT compiled into Coolify's CSS bundle. Always use `<x-forms.checkbox>`, `<x-forms.input>`, `<x-forms.select>`, `<x-forms.button>` instead of custom HTML. For reactive checkbox toggles, use `instantSave="methodName"`.
+13. **Adding casts to S3Storage model** — Can't apply traits dynamically. Use `S3Storage::retrieved()` and `S3Storage::saving()` events with `$model->mergeCasts()` to add `encrypted`/`boolean` casts for new columns.
 
 ## Important Notes
 

@@ -8,13 +8,12 @@ use Livewire\Component;
 /**
  * Livewire component for managing S3 backup encryption settings.
  *
- * Injected into Coolify's storage form page via middleware. Provides
- * a UI for configuring rclone crypt encryption on S3 destinations.
+ * Rendered via view overlay on the storage show page. Uses Coolify's
+ * native form components (<x-forms.checkbox>, <x-forms.input>, etc.)
+ * to ensure proper styling and Livewire hydration.
  *
- * Note: We intentionally do NOT call $this->authorize() in mount() because
- * this component is rendered via Blade::render() in middleware context
- * where auth context may not be fully available. The storage page itself
- * already authorizes access via StorageShow::mount().
+ * Note: We do NOT call $this->authorize() in mount() because the
+ * storage page itself already authorizes access via StorageShow::mount().
  */
 class StorageEncryptionForm extends Component
 {
@@ -37,11 +36,11 @@ class StorageEncryptionForm extends Component
     protected function rules(): array
     {
         return [
-            'encryptionEnabled' => 'boolean',
-            'encryptionPassword' => 'required_if:encryptionEnabled,true|max:255',
-            'encryptionSalt' => 'nullable|max:255',
-            'filenameEncryption' => 'in:off,standard,obfuscate',
-            'directoryNameEncryption' => 'boolean',
+            'encryptionEnabled' => ['boolean'],
+            'encryptionPassword' => ['required_if:encryptionEnabled,true', 'max:255'],
+            'encryptionSalt' => ['nullable', 'max:255'],
+            'filenameEncryption' => ['in:off,standard,obfuscate'],
+            'directoryNameEncryption' => ['boolean'],
         ];
     }
 
@@ -72,15 +71,32 @@ class StorageEncryptionForm extends Component
         }
     }
 
+    /**
+     * Called by the checkbox's instantSave to toggle encryption and re-render.
+     * The wire:model binding already flips $encryptionEnabled before this runs.
+     */
+    public function toggleEncryption(): void
+    {
+        $this->saveMessage = '';
+        $this->saveStatus = '';
+    }
+
     public function save(): void
     {
         try {
+            $this->validate();
+
             $storage = S3Storage::findOrFail($this->storageId);
 
             if ($this->encryptionEnabled && empty($this->encryptionPassword)) {
                 $this->dispatch('error', 'Encryption password is required when encryption is enabled.');
 
                 return;
+            }
+
+            // If filename encryption is off, force directory name encryption off
+            if ($this->filenameEncryption === 'off') {
+                $this->directoryNameEncryption = false;
             }
 
             $storage->encryption_enabled = $this->encryptionEnabled;
@@ -93,6 +109,8 @@ class StorageEncryptionForm extends Component
             $this->saveMessage = 'Encryption settings saved.';
             $this->saveStatus = 'success';
             $this->dispatch('success', 'Encryption settings saved successfully.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             $this->saveMessage = 'Failed to save: '.$e->getMessage();
             $this->saveStatus = 'error';
