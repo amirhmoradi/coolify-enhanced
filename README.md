@@ -41,7 +41,27 @@ cd coolify-granular-permissions
 sudo bash install.sh
 ```
 
-The installer will detect your Coolify installation, pull the pre-built image, deploy `docker-compose.custom.yml`, and restart the stack.
+Running without arguments opens an interactive menu where you can:
+1. **Install Coolify** from the official repository (for fresh servers)
+2. **Install the Permissions Addon** (requires Coolify)
+3. **Uninstall** the addon
+4. **Check Status** of your installation
+5. **Full Setup** (Coolify + addon in one step)
+
+For automation or CI, use CLI arguments:
+
+```bash
+# Fresh server: install Coolify + addon non-interactively
+sudo bash install.sh --install-coolify --install-addon --unattended
+
+# Just install the addon (Coolify already running)
+sudo bash install.sh --install-addon
+
+# Check what's installed
+sudo bash install.sh --status
+```
+
+Run `sudo bash install.sh --help` for all options.
 
 ### Manual Install
 

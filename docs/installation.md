@@ -4,16 +4,15 @@ This guide covers all methods of installing the Coolify Granular Permissions pac
 
 ## Prerequisites
 
-- Running Coolify v4 installation
-- Docker and Docker Compose
-- SSH access to your Coolify server
+- SSH/root access to your server
+- Docker and Docker Compose (installed automatically if using the Coolify installer)
 - Basic familiarity with Docker
 
 ## Quick Start (Recommended)
 
-The fastest way to install is using the automated installer script.
+The fastest way to get started is using the setup script, which works on both fresh servers and existing Coolify installations.
 
-### Automated Install
+### Interactive Setup
 
 ```bash
 git clone https://github.com/amirhmoradi/coolify-granular-permissions.git
@@ -21,7 +20,42 @@ cd coolify-granular-permissions
 sudo bash install.sh
 ```
 
-The script will:
+This opens an interactive menu with options:
+1. **Install Coolify** - Install Coolify from the official repository (for fresh servers)
+2. **Install Permissions Addon** - Install the granular permissions addon
+3. **Uninstall Permissions Addon** - Remove the addon
+4. **Check Installation Status** - See what's installed and running
+5. **Full Setup** - Install Coolify + addon in one step
+
+After each action, you're returned to the menu to continue with the next step.
+
+### CLI Arguments (for automation)
+
+```bash
+# Fresh server: install everything non-interactively
+sudo bash install.sh --install-coolify --install-addon --unattended
+
+# Install only Coolify
+sudo bash install.sh --install-coolify
+
+# Install only the addon (Coolify already running)
+sudo bash install.sh --install-addon
+
+# Install addon using local build
+sudo bash install.sh --install-addon --local
+
+# Check installation status
+sudo bash install.sh --status
+
+# Uninstall addon
+sudo bash install.sh --uninstall
+
+# Show all options
+sudo bash install.sh --help
+```
+
+### What the addon installer does
+
 1. Verify your Coolify installation at `/data/coolify/source/`
 2. Pull the pre-built image from GHCR (or build locally with `--local`)
 3. Create `docker-compose.custom.yml` (Coolify natively supports this file)

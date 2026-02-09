@@ -382,12 +382,30 @@ public function store(Request $request): JsonResponse
 
 ## Installation & Deployment
 
-### Install Script (`install.sh`)
+### Setup Script (`install.sh`)
 
-Automated installer that:
+Menu-driven setup script that also supports CLI arguments for automation:
+
+**Interactive mode** (no args): Displays a menu with options:
+1. Install Coolify from official repository (fresh server setup)
+2. Install Granular Permissions addon (requires Coolify)
+3. Uninstall Granular Permissions addon (delegates to `uninstall.sh`)
+4. Check installation status
+5. Full setup (Coolify + addon in sequence)
+
+**CLI mode** (with args):
+- `--install-coolify` - Downloads and runs the official Coolify installer
+- `--install-addon` - Installs the permissions addon (GHCR or `--local`)
+- `--uninstall` - Uninstalls the addon
+- `--status` - Shows system/Coolify/addon status
+- `--local` - Build image locally instead of pulling from GHCR
+- `--unattended` - Non-interactive, accepts all defaults
+- Args can be combined: `--install-coolify --install-addon --unattended`
+
+The addon install action:
 1. Checks prerequisites (root, Docker, Docker Compose)
 2. Detects Coolify installation at `/data/coolify/source/`
-3. Supports both GHCR image pull and local build (`--local` flag)
+3. Supports both GHCR image pull and local build
 4. Creates `docker-compose.custom.yml` (Coolify natively supports this file)
 5. Sets `COOLIFY_GRANULAR_PERMISSIONS=true` in `.env`
 6. Restarts Coolify via `upgrade.sh`
