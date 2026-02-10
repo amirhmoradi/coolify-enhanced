@@ -68,6 +68,24 @@ class ProjectPolicy
         return PermissionService::canPerform($user, 'delete', $project);
     }
 
+    public function restore(User $user, Project $project): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $project);
+    }
+
+    public function forceDelete(User $user, Project $project): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'delete', $project);
+    }
+
     /**
      * Determine whether the user can manage access to the project.
      */

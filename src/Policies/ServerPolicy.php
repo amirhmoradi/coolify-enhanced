@@ -49,4 +49,58 @@ class ServerPolicy
 
         return PermissionService::hasRoleBypass($user);
     }
+
+    public function restore(User $user, Server $server): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
+    }
+
+    public function forceDelete(User $user, Server $server): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
+    }
+
+    public function manageProxy(User $user, Server $server): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
+    }
+
+    public function manageSentinel(User $user, Server $server): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
+    }
+
+    public function manageCaCertificate(User $user, Server $server): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
+    }
+
+    public function viewSecurity(User $user, Server $server): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
+    }
 }

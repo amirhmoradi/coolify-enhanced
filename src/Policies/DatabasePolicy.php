@@ -58,6 +58,24 @@ class DatabasePolicy
         return PermissionService::canPerform($user, 'delete', $database);
     }
 
+    public function restore(User $user, $database): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $database);
+    }
+
+    public function forceDelete(User $user, $database): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'delete', $database);
+    }
+
     public function deploy(User $user, $database): bool
     {
         if (! PermissionService::isEnabled()) {
@@ -65,6 +83,32 @@ class DatabasePolicy
         }
 
         return PermissionService::canPerform($user, 'deploy', $database);
+    }
+
+    /**
+     * Determine whether the user can start/stop the database.
+     */
+    public function manage(User $user, $database): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $database);
+    }
+
+    /**
+     * Determine whether the user can manage database backups.
+     *
+     * Used by BackupEdit, BackupExecution Livewire components.
+     */
+    public function manageBackups(User $user, $database): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $database);
     }
 
     /**

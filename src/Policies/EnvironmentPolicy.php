@@ -53,4 +53,22 @@ class EnvironmentPolicy
 
         return PermissionService::canPerform($user, 'delete', $environment);
     }
+
+    public function restore(User $user, Environment $environment): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $environment);
+    }
+
+    public function forceDelete(User $user, Environment $environment): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'delete', $environment);
+    }
 }

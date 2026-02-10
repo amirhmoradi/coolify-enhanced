@@ -67,6 +67,24 @@ class ApplicationPolicy
         return PermissionService::canPerform($user, 'delete', $application);
     }
 
+    public function restore(User $user, Application $application): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $application);
+    }
+
+    public function forceDelete(User $user, Application $application): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'delete', $application);
+    }
+
     /**
      * Determine whether the user can deploy the application.
      */
@@ -77,6 +95,30 @@ class ApplicationPolicy
         }
 
         return PermissionService::canPerform($user, 'deploy', $application);
+    }
+
+    /**
+     * Determine whether the user can manage deployments (view logs, cancel).
+     */
+    public function manageDeployments(User $user, Application $application): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'deploy', $application);
+    }
+
+    /**
+     * Determine whether the user can cleanup the deployment queue.
+     */
+    public function cleanupDeploymentQueue(User $user): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::hasRoleBypass($user);
     }
 
     /**

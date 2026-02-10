@@ -54,6 +54,48 @@ class ServicePolicy
         return PermissionService::canPerform($user, 'delete', $service);
     }
 
+    public function restore(User $user, Service $service): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'update', $service);
+    }
+
+    public function forceDelete(User $user, Service $service): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'delete', $service);
+    }
+
+    /**
+     * Determine whether the user can stop the service.
+     */
+    public function stop(User $user, Service $service): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'deploy', $service);
+    }
+
+    /**
+     * Determine whether the user can access the terminal.
+     */
+    public function accessTerminal(User $user, Service $service): bool
+    {
+        if (! PermissionService::isEnabled()) {
+            return true;
+        }
+
+        return PermissionService::canPerform($user, 'manage', $service);
+    }
+
     public function deploy(User $user, Service $service): bool
     {
         if (! PermissionService::isEnabled()) {
