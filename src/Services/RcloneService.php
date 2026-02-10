@@ -141,7 +141,9 @@ class RcloneService
         $commands[] = "chmod 600 {$envFilePath}";
 
         // Start rclone container with env file and volume mount
+        // --entrypoint "" overrides the image's ENTRYPOINT ["rclone"] so sleep runs as a shell command
         $commands[] = "docker run -d --network {$network} --name {$containerName}"
+            ." --entrypoint ''"
             ." --env-file {$envFilePath}"
             ." -v {$backupLocation}:{$backupLocation}:ro"
             ." {$rcloneImage} sleep 3600";
@@ -189,8 +191,9 @@ class RcloneService
         $commands[] = "echo '{$envBase64}' | base64 -d > {$envFilePath}";
         $commands[] = "chmod 600 {$envFilePath}";
 
-        // Start rclone container
+        // Start rclone container (--entrypoint "" overrides image's ENTRYPOINT ["rclone"])
         $commands[] = "docker run -d --network {$network} --name {$containerName}"
+            ." --entrypoint ''"
             ." --env-file {$envFilePath}"
             ." {$rcloneImage} sleep 3600";
 
@@ -229,8 +232,9 @@ class RcloneService
         $commands[] = "echo '{$envBase64}' | base64 -d > {$envFilePath}";
         $commands[] = "chmod 600 {$envFilePath}";
 
-        // Start rclone container
+        // Start rclone container (--entrypoint "" overrides image's ENTRYPOINT ["rclone"])
         $commands[] = "docker run -d --name {$containerName}"
+            ." --entrypoint ''"
             ." --env-file {$envFilePath}"
             ." {$rcloneImage} sleep 3600";
 
