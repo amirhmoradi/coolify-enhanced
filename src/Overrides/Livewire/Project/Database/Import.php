@@ -536,13 +536,20 @@ EOD;
                 'use_path_style_endpoint' => true,
             ]);
 
-            if (! $disk->exists($cleanPath)) {
+            // [PATH PREFIX OVERLAY] Apply path prefix for file check
+            $s3CheckPath = $cleanPath;
+            if (filled($s3Storage->path)) {
+                $pathPrefix = trim($s3Storage->path, '/');
+                $s3CheckPath = $pathPrefix.'/'.$cleanPath;
+            }
+
+            if (! $disk->exists($s3CheckPath)) {
                 $this->dispatch('error', 'File not found in S3. Please check the path.');
 
                 return;
             }
 
-            $this->s3FileSize = $disk->size($cleanPath);
+            $this->s3FileSize = $disk->size($s3CheckPath);
 
             $message = 'File found in S3. Size: '.formatBytes($this->s3FileSize);
             if ($this->s3EncryptionEnabled) {
@@ -636,10 +643,17 @@ EOD;
         $commands[] = "rm -f {$localDownloadPath} 2>/dev/null || true";
         $commands[] = "docker exec {$this->container} rm -f {$containerTmpPath} {$scriptPath} 2>/dev/null || true";
 
+        // [PATH PREFIX OVERLAY] Apply path prefix for rclone download
+        $rclonePath = $cleanPath;
+        if (filled($s3Storage->path)) {
+            $pathPrefix = trim($s3Storage->path, '/');
+            $rclonePath = $pathPrefix.'/'.$cleanPath;
+        }
+
         // 2. Build rclone download commands (creates container, downloads via crypt)
         $downloadCommands = RcloneService::buildDownloadCommands(
             $s3Storage,
-            $cleanPath,
+            $rclonePath,
             $localDownloadPath,
             $rcloneContainerName,
             $destinationNetwork
@@ -734,7 +748,14 @@ EOD;
         $escapedSecret = escapeshellarg($secret);
         $commands[] = "docker exec {$containerName} mc alias set s3temp {$escapedEndpoint} {$escapedKey} {$escapedSecret}";
 
-        $escapedS3Source = escapeshellarg("s3temp/{$bucket}/{$cleanPath}");
+        // [PATH PREFIX OVERLAY] Apply path prefix if configured
+        $s3FullPath = $cleanPath;
+        if (filled($s3Storage->path)) {
+            $pathPrefix = trim($s3Storage->path, '/');
+            $s3FullPath = $pathPrefix.'/'.$cleanPath;
+        }
+
+        $escapedS3Source = escapeshellarg("s3temp/{$bucket}/{$s3FullPath}");
         $commands[] = "docker exec {$containerName} mc stat {$escapedS3Source}";
 
         $escapedHelperTmpPath = escapeshellarg($helperTmpPath);

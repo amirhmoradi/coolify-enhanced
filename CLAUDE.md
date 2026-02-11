@@ -13,12 +13,13 @@ This file provides guidance to **Claude Code** and other AI assistants when work
 
 ## Project Overview
 
-This is a Laravel package that extends Coolify v4 with two main features:
+This is a Laravel package that extends Coolify v4 with three main features:
 
 1. **Granular Permissions** — Project-level and environment-level access management with role-based overrides
-2. **Encrypted S3 Backups** — Transparent encryption at rest for all database backups using rclone's crypt backend (NaCl SecretBox: XSalsa20 + Poly1305)
+2. **Encrypted S3 Backups** — Transparent encryption at rest for all backups using rclone's crypt backend (NaCl SecretBox: XSalsa20 + Poly1305)
+3. **Resource Backups** — Volume, configuration, and full backups for Applications, Services, and Databases (beyond Coolify's database-only backup)
 
-It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption, modified Coolify files are overlaid in the Docker image.
+It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image.
 
 ## Critical Architecture Knowledge
 
@@ -84,6 +85,21 @@ The encryption feature uses rclone's crypt backend (NaCl SecretBox) to transpare
 - **Env file for Docker**: Base64-encoded env file written to server, passed via `--env-file` to rclone container
 - **Backward compatible**: Tracks `is_encrypted` per backup execution; uses mc for unencrypted, rclone for encrypted
 - **Filename encryption**: Default `off`, optional `standard`/`obfuscate` modes; when enabled, all S3 ops go through rclone
+- **S3 path prefix**: Optional per-storage path prefix for multi-instance separation (from Coolify PR #7776)
+
+### Resource Backups Architecture
+
+Extends Coolify's database-only backups to support Docker volumes, configuration, and full backups for any resource:
+
+- **Separate model/table**: `ScheduledResourceBackup` and `ScheduledResourceBackupExecution` — parallel to Coolify's `ScheduledDatabaseBackup`
+- **Backup types**: `volume` (tar.gz Docker volumes), `configuration` (JSON export of settings, env vars, compose), `full` (both), `coolify_instance` (full `/data/coolify` installation minus backups)
+- **Volume backup approach**: Uses `docker inspect` to discover mounts, then `tar czf` via helper Alpine container for named volumes or direct tar for bind mounts
+- **Configuration export**: Serializes resource model, environment variables, persistent storages, docker-compose, custom labels to JSON
+- **Same S3 infrastructure**: Reuses `RcloneService` for encrypted uploads; uses mc for unencrypted uploads (same pattern as database backups)
+- **Encryption support**: All resource backup types support the same per-S3-storage encryption as database backups
+- **Independent scheduling**: Each resource can have its own backup schedule via cron expressions
+- **Retention policies**: Same local/S3 retention by amount, days, or storage as database backups
+- **Backup directory structure**: `/data/coolify/backups/resources/{team-slug}-{team-id}/{resource-name}-{uuid}/`
 
 ## Quick Reference
 
@@ -98,7 +114,9 @@ coolify-enhanced/
 │   │   └── RcloneService.php                  # Rclone encryption commands
 │   ├── Models/
 │   │   ├── ProjectUser.php                    # Project access pivot
-│   │   └── EnvironmentUser.php                # Environment override pivot
+│   │   ├── EnvironmentUser.php                # Environment override pivot
+│   │   ├── ScheduledResourceBackup.php        # Resource backup schedule model
+│   │   └── ScheduledResourceBackupExecution.php # Resource backup execution model
 │   ├── Traits/
 │   │   └── HasS3Encryption.php                # S3 encryption helpers for model
 │   ├── Policies/                              # Laravel policies (override Coolify's)
@@ -121,17 +139,23 @@ coolify-enhanced/
 │   │   │   └── show.blade.php                 # Storage page with encryption form
 │   │   └── Helpers/
 │   │       └── databases.php                  # Encryption-aware S3 delete
+│   ├── Jobs/
+│   │   └── ResourceBackupJob.php              # Volume/config/full backup job
 │   ├── Http/
 │   │   ├── Controllers/Api/                   # API controllers
+│   │   │   ├── PermissionsController.php      # Permission management API
+│   │   │   └── ResourceBackupController.php   # Resource backup API
 │   │   └── Middleware/
 │   │       └── InjectPermissionsUI.php        # UI injection middleware
 │   └── Livewire/
 │       ├── AccessMatrix.php                   # Access matrix component
-│       └── StorageEncryptionForm.php          # Encryption settings component
+│       ├── StorageEncryptionForm.php          # S3 path prefix + encryption settings
+│       └── ResourceBackupManager.php          # Resource backup management UI
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
-│   └── storage-encryption-form.blade.php      # Encryption form view
+│   ├── storage-encryption-form.blade.php      # Path prefix + encryption form view
+│   └── resource-backup-manager.blade.php      # Resource backup management view
 ├── routes/                                     # API routes
 ├── config/                                     # Package configuration
 ├── docker/                                     # Docker build files
@@ -151,8 +175,13 @@ coolify-enhanced/
 | `src/Traits/HasS3Encryption.php` | Encryption helpers for S3Storage model |
 | `src/Policies/EnvironmentVariablePolicy.php` | Sub-resource policy via polymorphic parent |
 | `src/Livewire/AccessMatrix.php` | Unified access management UI |
-| `src/Livewire/StorageEncryptionForm.php` | S3 encryption settings UI |
-| `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption-aware backup job overlay |
+| `src/Livewire/StorageEncryptionForm.php` | S3 path prefix + encryption settings UI |
+| `src/Livewire/ResourceBackupManager.php` | Resource backup scheduling and management UI |
+| `src/Jobs/ResourceBackupJob.php` | Volume/config/full backup job |
+| `src/Models/ScheduledResourceBackup.php` | Resource backup schedule model |
+| `src/Models/ScheduledResourceBackupExecution.php` | Resource backup execution tracking |
+| `src/Http/Controllers/Api/ResourceBackupController.php` | Resource backup REST API |
+| `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption + path prefix aware backup job overlay |
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
@@ -236,6 +265,12 @@ Two approaches are used to add UI components to Coolify pages:
 11. **Middleware injection breaks Livewire interactivity** — Components rendered via `Blade::render()` in middleware and moved via JavaScript `appendChild()` lose Livewire/Alpine.js bindings. Use view overlays for interactive components (toggles, forms, buttons).
 12. **Use Coolify's native form components** — Custom Tailwind CSS classes (e.g., `peer-checked:bg-blue-600`, `after:content-['']`) are NOT compiled into Coolify's CSS bundle. Always use `<x-forms.checkbox>`, `<x-forms.input>`, `<x-forms.select>`, `<x-forms.button>` instead of custom HTML. For reactive checkbox toggles, use `instantSave="methodName"`.
 13. **Adding casts to S3Storage model** — Can't apply traits dynamically. Use `S3Storage::retrieved()` and `S3Storage::saving()` events with `$model->mergeCasts()` to add `encrypted`/`boolean` casts for new columns.
+14. **S3 path prefix must be applied everywhere** — When `$s3->path` is set, it must be prepended in uploads (mc and rclone), deletes (S3 driver and rclone), restores (mc stat/cp and rclone download), and file existence checks.
+15. **Volume backup uses helper Alpine container** — For Docker named volumes, use `docker run --rm -v volume:/source:ro alpine tar czf` rather than attempting to access `/var/lib/docker/volumes` directly.
+16. **Resource backup scheduling** — Uses `$app->booted()` to register a scheduler callback that checks cron expressions every minute via `CronExpression::isDue()`.
+17. **Resource backup directory layout** — Uses `/data/coolify/backups/resources/` (not `/databases/`) to avoid conflicts with Coolify's native database backup paths.
+18. **Coolify instance backup excludes backups/** — `backupCoolifyInstance()` uses `--exclude=./backups --exclude=./metrics` to prevent backup-of-backups duplication.
+19. **Feature flag safety** — `ResourceBackupJob::handle()` checks `config('coolify-enhanced.enabled')` at runtime so queued jobs exit silently if the feature is disabled. API controller also guards in constructor.
 
 ## Important Notes
 
@@ -245,6 +280,8 @@ Two approaches are used to add UI components to Coolify pages:
 4. **v5 compatibility** - Coolify v5 may include similar features; migration guide will be provided
 5. **Backward compatible** - When disabled, behaves like standard Coolify
 6. **Encryption is per-storage** - Each S3 storage destination can independently enable encryption
+7. **S3 path prefix** - Configurable per-storage path prefix for multi-instance bucket sharing
+8. **Resource backups** - Volume, configuration, and full backups via `enhanced::resource-backup-manager` component
 
 ## See Also
 

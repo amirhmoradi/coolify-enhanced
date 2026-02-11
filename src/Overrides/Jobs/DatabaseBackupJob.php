@@ -4,12 +4,14 @@
 // OVERLAY: Modified version of Coolify's DatabaseBackupJob
 // =============================================================================
 // This file replaces app/Jobs/DatabaseBackupJob.php in the Coolify container.
-// Changes from the original are marked with [ENCRYPTION OVERLAY] comments.
+// Changes from the original are marked with [ENCRYPTION OVERLAY] or
+// [PATH PREFIX OVERLAY] comments.
 //
-// The only modifications are:
+// Modifications:
 //   1. Added import for RcloneService
 //   2. Modified upload_to_s3() to use rclone when encryption is enabled
 //   3. Added is_encrypted tracking on backup execution records
+//   4. Added S3 path prefix support (PR #7776)
 // =============================================================================
 
 namespace App\Jobs;
@@ -672,11 +674,18 @@ class DatabaseBackupJob implements ShouldBeEncrypted, ShouldQueue
         $containerName = "rclone-backup-{$this->backup_log_uuid}";
 
         try {
+            // [PATH PREFIX OVERLAY] Apply S3 path prefix if configured
+            $remotePath = $this->backup_dir.'/';
+            if (filled($this->s3->path)) {
+                $pathPrefix = trim($this->s3->path, '/');
+                $remotePath = '/'.$pathPrefix.$this->backup_dir.'/';
+            }
+
             // Build rclone upload commands
             $commands = RcloneService::buildUploadCommands(
                 $this->s3,
                 $this->backup_location,
-                $this->backup_dir.'/',
+                $remotePath,
                 $containerName,
                 $network
             );
@@ -741,7 +750,19 @@ class DatabaseBackupJob implements ShouldBeEncrypted, ShouldQueue
         $escapedSecret = escapeshellarg($secret);
 
         $commands[] = "docker exec backup-of-{$this->backup_log_uuid} mc alias set temporary {$escapedEndpoint} {$escapedKey} {$escapedSecret}";
-        $commands[] = "docker exec backup-of-{$this->backup_log_uuid} mc cp $this->backup_location temporary/$bucket{$this->backup_dir}/";
+
+        // [PATH PREFIX OVERLAY] Build S3 path with optional prefix
+        $s3Path = $bucket;
+        if (filled($this->s3->path)) {
+            $pathPrefix = trim($this->s3->path, '/');
+            $s3Path .= '/'.$pathPrefix;
+        }
+        $s3Path .= $this->backup_dir.'/';
+
+        $escapedBackupLocation = escapeshellarg($this->backup_location);
+        $escapedS3Path = escapeshellarg("temporary/{$s3Path}");
+
+        $commands[] = "docker exec backup-of-{$this->backup_log_uuid} mc cp {$escapedBackupLocation} {$escapedS3Path}";
 
         try {
             instant_remote_process($commands, $this->server, true, false, null, disableMultiplexing: true);

@@ -255,6 +255,16 @@ function deleteBackupsS3(string|array|null $filenames, S3Storage $s3): void
         return;
     }
 
+    // [PATH PREFIX OVERLAY] Apply path prefix if configured
+    if (filled($s3->path)) {
+        $pathPrefix = trim($s3->path, '/');
+        $filenames = array_map(function ($filename) use ($pathPrefix) {
+            $cleanFilename = ltrim($filename, '/');
+
+            return $pathPrefix.'/'.$cleanFilename;
+        }, $filenames);
+    }
+
     // Original S3 driver approach (works for unencrypted and content-only encryption)
     $disk = Storage::build([
         'driver' => 's3',

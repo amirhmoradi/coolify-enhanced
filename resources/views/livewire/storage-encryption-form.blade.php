@@ -1,10 +1,28 @@
 <div>
+    {{-- S3 Path Prefix --}}
+    <div class="flex flex-col gap-2 pt-6">
+        <div>
+            <h2>Path Prefix</h2>
+            <div class="subtitle">
+                Optional prefix added before the standard backup path. Useful for separating multiple Coolify instances in a single bucket.
+            </div>
+        </div>
+
+        <x-forms.input
+            id="path"
+            label="Path Prefix"
+            placeholder="e.g., production or instance-1"
+            helper="Backups will be stored under this prefix in the bucket. Leave empty for no prefix."
+        />
+    </div>
+
+    {{-- Backup Encryption --}}
     <div class="flex flex-col gap-2 pt-6">
         <div>
             <h2>Backup Encryption</h2>
             <div class="subtitle">
                 Encrypt backups at rest using rclone's crypt backend (NaCl SecretBox).
-                When enabled, all database backups to this S3 destination are encrypted before upload.
+                When enabled, all backups to this S3 destination are encrypted before upload.
             </div>
         </div>
 
@@ -61,7 +79,7 @@
         @endif
 
         <div class="flex items-center gap-3 pt-2">
-            <x-forms.button wire:click="save">Save Encryption Settings</x-forms.button>
+            <x-forms.button wire:click="save">Save Enhanced Settings</x-forms.button>
 
             @if($saveMessage)
                 <span class="text-sm {{ $saveStatus === 'success' ? 'text-success' : 'text-error' }}">

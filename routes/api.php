@@ -1,11 +1,12 @@
 <?php
 
 use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\PermissionsController;
+use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\ResourceBackupController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Coolify Granular Permissions API Routes
+| Coolify Enhanced API Routes
 |--------------------------------------------------------------------------
 */
 
@@ -25,4 +26,20 @@ Route::middleware(['auth:sanctum', 'api.sensitive'])->prefix('v1')->group(functi
 
     Route::get('/projects/{uuid}/access/{user_id}/check', [PermissionsController::class, 'checkPermission'])
         ->middleware('api.ability:read');
+
+    // Resource backup management
+    Route::get('/resource-backups', [ResourceBackupController::class, 'index'])
+        ->middleware('api.ability:read');
+
+    Route::post('/resource-backups', [ResourceBackupController::class, 'store'])
+        ->middleware('api.ability:write');
+
+    Route::get('/resource-backups/{uuid}', [ResourceBackupController::class, 'show'])
+        ->middleware('api.ability:read');
+
+    Route::post('/resource-backups/{uuid}/trigger', [ResourceBackupController::class, 'trigger'])
+        ->middleware('api.ability:write');
+
+    Route::delete('/resource-backups/{uuid}', [ResourceBackupController::class, 'destroy'])
+        ->middleware('api.ability:write');
 });

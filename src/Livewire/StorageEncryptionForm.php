@@ -19,6 +19,9 @@ class StorageEncryptionForm extends Component
 {
     public ?int $storageId = null;
 
+    // S3 path prefix (PR #7776)
+    public ?string $path = null;
+
     public bool $encryptionEnabled = false;
 
     public string $encryptionPassword = '';
@@ -36,6 +39,7 @@ class StorageEncryptionForm extends Component
     protected function rules(): array
     {
         return [
+            'path' => ['nullable', 'max:255', 'regex:/^[a-zA-Z0-9\/\-\_\.]*$/', 'not_regex:/\.\./'],
             'encryptionEnabled' => ['boolean'],
             'encryptionPassword' => ['required_if:encryptionEnabled,true', 'max:255'],
             'encryptionSalt' => ['nullable', 'max:255'],
@@ -53,9 +57,10 @@ class StorageEncryptionForm extends Component
 
         $this->storageId = $storage->id;
 
-        // Gracefully handle case where encryption columns don't exist yet
+        // Gracefully handle case where columns don't exist yet
         // (migration may not have run)
         try {
+            $this->path = $storage->path ?? null;
             $this->encryptionEnabled = (bool) ($storage->encryption_enabled ?? false);
             $this->encryptionPassword = $storage->encryption_password ?? '';
             $this->encryptionSalt = $storage->encryption_salt ?? '';
@@ -63,6 +68,7 @@ class StorageEncryptionForm extends Component
             $this->directoryNameEncryption = (bool) ($storage->directory_name_encryption ?? false);
         } catch (\Throwable $e) {
             // Columns might not exist yet - use defaults
+            $this->path = null;
             $this->encryptionEnabled = false;
             $this->encryptionPassword = '';
             $this->encryptionSalt = '';
@@ -99,6 +105,10 @@ class StorageEncryptionForm extends Component
                 $this->directoryNameEncryption = false;
             }
 
+            // Save S3 path prefix
+            $storage->path = filled($this->path) ? $this->path : null;
+
+            // Save encryption settings
             $storage->encryption_enabled = $this->encryptionEnabled;
             $storage->encryption_password = $this->encryptionEnabled ? $this->encryptionPassword : null;
             $storage->encryption_salt = $this->encryptionEnabled ? ($this->encryptionSalt ?: null) : null;
@@ -106,9 +116,9 @@ class StorageEncryptionForm extends Component
             $storage->directory_name_encryption = $this->encryptionEnabled ? $this->directoryNameEncryption : false;
             $storage->save();
 
-            $this->saveMessage = 'Encryption settings saved.';
+            $this->saveMessage = 'Settings saved.';
             $this->saveStatus = 'success';
-            $this->dispatch('success', 'Encryption settings saved successfully.');
+            $this->dispatch('success', 'Storage settings saved successfully.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {

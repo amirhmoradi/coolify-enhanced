@@ -56,6 +56,9 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         // Register global scopes to filter resources based on permissions
         $this->registerScopes();
 
+        // Register resource backup scheduler
+        $this->registerResourceBackupScheduler();
+
         // Defer policy registration to AFTER all service providers have booted.
         //
         // Laravel boots package providers BEFORE application providers.
@@ -89,6 +92,11 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
             'enhanced::storage-encryption-form',
             \AmirhMoradi\CoolifyEnhanced\Livewire\StorageEncryptionForm::class
         );
+
+        Livewire::component(
+            'enhanced::resource-backup-manager',
+            \AmirhMoradi\CoolifyEnhanced\Livewire\ResourceBackupManager::class
+        );
     }
 
     /**
@@ -113,6 +121,41 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         if (class_exists(\App\Models\Environment::class)) {
             \App\Models\Environment::addGlobalScope(new EnvironmentPermissionScope);
         }
+    }
+
+    /**
+     * Register the scheduler for resource backups.
+     *
+     * Queries enabled resource backup schedules and dispatches jobs
+     * according to their cron expressions.
+     */
+    protected function registerResourceBackupScheduler(): void
+    {
+        $this->app->booted(function () {
+            $schedule = $this->app->make(\Illuminate\Console\Scheduling\Schedule::class);
+
+            // Run every minute; check which resource backups are due
+            $schedule->call(function () {
+                $backups = \AmirhMoradi\CoolifyEnhanced\Models\ScheduledResourceBackup::where('enabled', true)->get();
+
+                foreach ($backups as $backup) {
+                    // Use Laravel's CronExpression to check if this backup is due
+                    try {
+                        $cron = new \Cron\CronExpression($backup->frequency);
+                        $timezone = $backup->timezone ?? config('app.timezone', 'UTC');
+                        $now = now()->setTimezone($timezone);
+
+                        if ($cron->isDue($now)) {
+                            \AmirhMoradi\CoolifyEnhanced\Jobs\ResourceBackupJob::dispatch($backup);
+                        }
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('ResourceBackup: Invalid cron for backup '.$backup->uuid, [
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            })->everyMinute()->name('coolify-enhanced:resource-backups')->withoutOverlapping();
+        });
     }
 
     /**
