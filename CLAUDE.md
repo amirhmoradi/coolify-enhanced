@@ -150,13 +150,15 @@ coolify-enhanced/
 │   └── Livewire/
 │       ├── AccessMatrix.php                   # Access matrix component
 │       ├── StorageEncryptionForm.php          # S3 path prefix + encryption settings
-│       └── ResourceBackupManager.php          # Resource backup management UI
+│       ├── ResourceBackupManager.php          # Resource backup management UI
+│       └── ResourceBackupPage.php             # Full-page backup component
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
 │   ├── storage-encryption-form.blade.php      # Path prefix + encryption form view
-│   └── resource-backup-manager.blade.php      # Resource backup management view
-├── routes/                                     # API routes
+│   ├── resource-backup-manager.blade.php      # Resource backup management view
+│   └── resource-backup-page.blade.php         # Full-page backup view
+├── routes/                                     # API and web routes
 ├── config/                                     # Package configuration
 ├── docker/                                     # Docker build files
 ├── docs/
@@ -185,7 +187,8 @@ coolify-enhanced/
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
-| `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix into team admin page |
+| `src/Livewire/ResourceBackupPage.php` | Full-page Livewire component for backup tab |
+| `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix + backup tabs |
 | `src/Models/ProjectUser.php` | Permission levels and helpers |
 | `config/coolify-enhanced.php` | Configuration options |
 | `docs/coolify-source/` | Coolify source reference (gitignored) |
@@ -240,15 +243,17 @@ Owners and Admins bypass all permission checks. Only Members and Viewers need ex
 - Environment: `/project/{uuid}/{env_name}`
 - New resource: `/project/{uuid}/{env_name}/new`
 - Application: `/project/{uuid}/{env_name}/application/{app_uuid}`
+- Resource Backups: `.../{resource_type}/{resource_uuid}/resource-backups`
 
 ### UI Integration
 
-Two approaches are used to add UI components to Coolify pages:
+Three approaches are used to add UI components to Coolify pages:
 
 - **Access Matrix** — injected via middleware into `/team/admin` page (for admin/owner users). Uses `Blade::render()` + JavaScript DOM positioning.
 - **Storage Encryption Form** — added via view overlay (`src/Overrides/Views/livewire/storage/show.blade.php`). The overlay adds `@livewire('enhanced::storage-encryption-form')` directly in the Blade template, ensuring proper Livewire hydration.
+- **Resource Backups Tab** — injected via middleware into resource detail pages (Application, Service, Database). A simple `<a>` link is appended to the heading navigation bar via JavaScript. Clicking it navigates to a full-page `ResourceBackupPage` Livewire component registered via `routes/web.php`.
 
-**Why two approaches?** The access matrix is read-only (no interactive Livewire bindings needed), so middleware injection works fine. The encryption form has interactive toggles and form inputs that require proper Livewire hydration — middleware injection + DOM moves break Alpine.js/Livewire bindings. The view overlay renders the component natively in the page lifecycle.
+**Why different approaches?** The access matrix and backup tab are non-interactive (no Livewire bindings), so middleware injection works fine. The encryption form has interactive toggles requiring proper Livewire hydration — middleware injection breaks Alpine.js bindings. The backup management page (`ResourceBackupPage`) is a full-page Livewire component with its own routes, rendered natively with proper Livewire lifecycle.
 
 ## Common Pitfalls
 
@@ -271,6 +276,8 @@ Two approaches are used to add UI components to Coolify pages:
 17. **Resource backup directory layout** — Uses `/data/coolify/backups/resources/` (not `/databases/`) to avoid conflicts with Coolify's native database backup paths.
 18. **Coolify instance backup excludes backups/** — `backupCoolifyInstance()` uses `--exclude=./backups --exclude=./metrics` to prevent backup-of-backups duplication.
 19. **Feature flag safety** — `ResourceBackupJob::handle()` checks `config('coolify-enhanced.enabled')` at runtime so queued jobs exit silently if the feature is disabled. API controller also guards in constructor.
+20. **Resource backup tab injection** — The "Resource Backups" tab is injected via JavaScript DOM manipulation in the middleware. It finds the heading `<nav>` by looking for the "Configuration" link text. The tab is a plain `<a>` with `wire:navigate`, inserted before the last non-link child (usually the Links component). Works across `livewire:navigated` SPA events.
+21. **ResourceBackupPage route registration** — Web routes must be loaded via `loadRoutesFrom()` in the service provider. Routes follow Coolify's URL pattern: `project/{project_uuid}/environment/{environment_uuid}/{resource_type}/{resource_uuid}/resource-backups`.
 
 ## Important Notes
 

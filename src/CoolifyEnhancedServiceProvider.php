@@ -34,13 +34,15 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'coolify-enhanced');
 
-        // Load API routes only (web UI is injected via middleware)
+        // Load routes
         $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
         // Register Livewire components
         $this->registerLivewireComponents();
 
         // Register middleware for UI injection into Coolify pages
+        // (access matrix on team admin page, backup tabs on resource pages)
         $this->registerMiddleware();
 
         // Publish configuration
@@ -96,6 +98,11 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         Livewire::component(
             'enhanced::resource-backup-manager',
             \AmirhMoradi\CoolifyEnhanced\Livewire\ResourceBackupManager::class
+        );
+
+        Livewire::component(
+            'enhanced::resource-backup-page',
+            \AmirhMoradi\CoolifyEnhanced\Livewire\ResourceBackupPage::class
         );
     }
 
