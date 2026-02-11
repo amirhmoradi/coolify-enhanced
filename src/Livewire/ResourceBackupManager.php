@@ -10,10 +10,11 @@ use Livewire\Component;
 use Visus\Cuid2\Cuid2;
 
 /**
- * Livewire component for managing resource backups (volumes, configuration, full).
+ * Livewire component for managing resource backups.
  *
- * This component can be embedded on any resource page (Application, Service, Database)
- * to manage volume and configuration backups.
+ * Supports two modes:
+ * - 'resource': Per-resource backups (volumes, configuration, full) on config pages
+ * - 'global': Coolify instance backups on the Settings > Backup page
  */
 class ResourceBackupManager extends Component
 {
@@ -22,6 +23,9 @@ class ResourceBackupManager extends Component
     public ?string $resourceType = null;
 
     public ?string $resourceName = null;
+
+    // Mode: 'resource' for per-resource, 'global' for settings page (coolify_instance only)
+    public string $mode = 'resource';
 
     // Backup form
     public string $backupType = 'volume';
@@ -60,11 +64,21 @@ class ResourceBackupManager extends Component
 
     public string $saveStatus = '';
 
-    public function mount(int $resourceId, string $resourceType, ?string $resourceName = null): void
-    {
+    public function mount(
+        ?int $resourceId = null,
+        ?string $resourceType = null,
+        ?string $resourceName = null,
+        string $mode = 'resource'
+    ): void {
         $this->resourceId = $resourceId;
         $this->resourceType = $resourceType;
         $this->resourceName = $resourceName;
+        $this->mode = $mode;
+
+        // Default backup type based on mode
+        if ($this->mode === 'global') {
+            $this->backupType = 'coolify_instance';
+        }
 
         $this->loadBackups();
         $this->loadS3Storages();
@@ -74,13 +88,14 @@ class ResourceBackupManager extends Component
     {
         $query = ScheduledResourceBackup::with('latest_log');
 
-        // Show resource-specific backups AND coolify_instance backups for this team
-        $query->where(function ($q) {
-            $q->where(function ($sub) {
-                $sub->where('resource_id', $this->resourceId)
-                    ->where('resource_type', $this->resourceType);
-            })->orWhere('backup_type', 'coolify_instance');
-        });
+        if ($this->mode === 'global') {
+            // Global mode: only show coolify_instance backups
+            $query->where('backup_type', 'coolify_instance');
+        } else {
+            // Resource mode: only show this resource's backups
+            $query->where('resource_id', $this->resourceId)
+                ->where('resource_type', $this->resourceType);
+        }
 
         // Scope to current team
         try {
@@ -140,7 +155,8 @@ class ResourceBackupManager extends Component
             ];
 
             // coolify_instance doesn't need a resource — it backs up /data/coolify
-            if ($this->backupType === 'coolify_instance') {
+            if ($this->backupType === 'coolify_instance' || $this->mode === 'global') {
+                $data['backup_type'] = 'coolify_instance';
                 $data['resource_type'] = 'coolify_instance';
                 $data['resource_id'] = 0;
             } else {
@@ -148,12 +164,12 @@ class ResourceBackupManager extends Component
                 $data['resource_id'] = $this->resourceId;
             }
 
-            $backup = ScheduledResourceBackup::create($data);
+            ScheduledResourceBackup::create($data);
 
             $this->loadBackups();
             $this->saveMessage = 'Backup schedule created.';
             $this->saveStatus = 'success';
-            $this->dispatch('success', 'Resource backup schedule created successfully.');
+            $this->dispatch('success', 'Backup schedule created successfully.');
         } catch (\Throwable $e) {
             $this->saveMessage = 'Failed: '.$e->getMessage();
             $this->saveStatus = 'error';

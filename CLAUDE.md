@@ -135,8 +135,18 @@ coolify-enhanced/
 │   │   │   └── DatabaseBackupJob.php          # Encryption-aware backup job
 │   │   ├── Livewire/Project/Database/
 │   │   │   └── Import.php                     # Encryption-aware restore
-│   │   ├── Views/livewire/storage/
-│   │   │   └── show.blade.php                 # Storage page with encryption form
+│   │   ├── Views/
+│   │   │   ├── livewire/storage/
+│   │   │   │   └── show.blade.php             # Storage page with encryption form
+│   │   │   ├── livewire/settings-backup.blade.php   # Settings backup with instance file backup
+│   │   │   ├── livewire/project/application/
+│   │   │   │   └── configuration.blade.php    # App config + Resource Backups sidebar
+│   │   │   ├── livewire/project/database/
+│   │   │   │   └── configuration.blade.php    # DB config + Resource Backups sidebar
+│   │   │   ├── livewire/project/service/
+│   │   │   │   └── configuration.blade.php    # Service config + Resource Backups sidebar
+│   │   │   └── components/server/
+│   │   │       └── sidebar.blade.php          # Server sidebar + Resource Backups item
 │   │   └── Helpers/
 │   │       └── databases.php                  # Encryption-aware S3 delete
 │   ├── Jobs/
@@ -151,7 +161,7 @@ coolify-enhanced/
 │       ├── AccessMatrix.php                   # Access matrix component
 │       ├── StorageEncryptionForm.php          # S3 path prefix + encryption settings
 │       ├── ResourceBackupManager.php          # Resource backup management UI
-│       └── ResourceBackupPage.php             # Full-page backup component
+│       └── ResourceBackupPage.php             # Server backup page component
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
@@ -187,8 +197,8 @@ coolify-enhanced/
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
-| `src/Livewire/ResourceBackupPage.php` | Full-page Livewire component for backup tab |
-| `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix + backup tabs |
+| `src/Livewire/ResourceBackupPage.php` | Server resource backups page component |
+| `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix into team admin page |
 | `src/Models/ProjectUser.php` | Permission levels and helpers |
 | `config/coolify-enhanced.php` | Configuration options |
 | `docs/coolify-source/` | Coolify source reference (gitignored) |
@@ -247,13 +257,20 @@ Owners and Admins bypass all permission checks. Only Members and Viewers need ex
 
 ### UI Integration
 
-Three approaches are used to add UI components to Coolify pages:
+Two approaches are used to add UI components to Coolify pages:
 
 - **Access Matrix** — injected via middleware into `/team/admin` page (for admin/owner users). Uses `Blade::render()` + JavaScript DOM positioning.
-- **Storage Encryption Form** — added via view overlay (`src/Overrides/Views/livewire/storage/show.blade.php`). The overlay adds `@livewire('enhanced::storage-encryption-form')` directly in the Blade template, ensuring proper Livewire hydration.
-- **Resource Backups Tab** — injected via middleware into resource detail pages (Application, Service, Database). A simple `<a>` link is appended to the heading navigation bar via JavaScript. Clicking it navigates to a full-page `ResourceBackupPage` Livewire component registered via `routes/web.php`.
+- **View overlays** — modified copies of Coolify's Blade views. Used for:
+  - **Storage Encryption Form** (`storage/show.blade.php`) — S3 path prefix + encryption settings
+  - **Settings Backup** (`settings-backup.blade.php`) — instance file backup section below Coolify's native DB backup
+  - **Resource Configuration** (`project/application/configuration.blade.php`, etc.) — adds "Resource Backups" sidebar item + `@elseif` content section that renders `enhanced::resource-backup-manager`
+  - **Server Sidebar** (`components/server/sidebar.blade.php`) — adds "Resource Backups" sidebar item
 
-**Why different approaches?** The access matrix and backup tab are non-interactive (no Livewire bindings), so middleware injection works fine. The encryption form has interactive toggles requiring proper Livewire hydration — middleware injection breaks Alpine.js bindings. The backup management page (`ResourceBackupPage`) is a full-page Livewire component with its own routes, rendered natively with proper Livewire lifecycle.
+**Why view overlays for backups?** The configuration pages use `$currentRoute` to conditionally render content. Adding a sidebar item requires both the `<a>` link in the sidebar AND an `@elseif` branch in the content area. This can only be done in the Blade view — not via middleware or JavaScript. The backup manager component (`enhanced::resource-backup-manager`) needs proper Livewire hydration, which requires native rendering in the view.
+
+**ResourceBackupManager modes:** The component supports two modes:
+- `resource` (default): Per-resource backups (volume, configuration, full) — used on resource configuration pages
+- `global`: Coolify instance file backups — used on settings backup page and server resource backups page
 
 ## Common Pitfalls
 
@@ -276,8 +293,10 @@ Three approaches are used to add UI components to Coolify pages:
 17. **Resource backup directory layout** — Uses `/data/coolify/backups/resources/` (not `/databases/`) to avoid conflicts with Coolify's native database backup paths.
 18. **Coolify instance backup excludes backups/** — `backupCoolifyInstance()` uses `--exclude=./backups --exclude=./metrics` to prevent backup-of-backups duplication.
 19. **Feature flag safety** — `ResourceBackupJob::handle()` checks `config('coolify-enhanced.enabled')` at runtime so queued jobs exit silently if the feature is disabled. API controller also guards in constructor.
-20. **Resource backup tab injection** — The "Resource Backups" tab is injected via JavaScript DOM manipulation. The script is always injected (not page-gated) and computes the backup URL dynamically from `window.location.pathname` using a regex that matches `/project/{uuid}/environment/{uuid}/(application|service|database)/{uuid}`. This avoids stale URLs during SPA navigation. The tab is a plain `<a>` with `wire:navigate`, inserted before the last non-link child. If a tab already exists, its URL and active state are updated rather than creating a duplicate.
-21. **ResourceBackupPage route registration** — Web routes must be loaded via `loadRoutesFrom()` in the service provider. Routes follow Coolify's URL pattern: `project/{project_uuid}/environment/{environment_uuid}/{resource_type}/{resource_uuid}/resource-backups`.
+20. **Resource backup sidebar integration** — Resource backup sidebar items are added via view overlays on Coolify's configuration pages (not middleware injection). Each overlay adds an `<a>` sidebar link and an `@elseif` content branch. The routes point to Coolify's own Configuration components (e.g., `App\Livewire\Project\Application\Configuration`), so the overlay view's `$currentRoute` check renders the backup manager.
+21. **Resource backup route registration** — Web routes for resource backups point to Coolify's existing Configuration Livewire components (not our own). The overlay views detect the route name via `$currentRoute` and render the appropriate content. The server backup route uses our own `ResourceBackupPage` component since servers don't use the Configuration pattern.
+22. **Settings backup overlay** — The settings backup page overlay adds an "Instance File Backup" section below Coolify's native database backup. It uses the `global` mode of ResourceBackupManager which only shows `coolify_instance` backup schedules.
+23. **Configuration overlay maintenance** — Overlay views must be kept in sync with upstream Coolify changes. Each overlay is a full copy of the original with minimal additions (sidebar link + content branch). Mark enhanced additions with `{{-- Coolify Enhanced: ... --}}` comments for easy diffing.
 
 ## Important Notes
 

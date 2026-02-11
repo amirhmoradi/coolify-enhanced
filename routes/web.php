@@ -8,30 +8,39 @@ use Illuminate\Support\Facades\Route;
 | Coolify Enhanced Web Routes
 |--------------------------------------------------------------------------
 |
-| These routes add "Resource Backups" pages to Coolify's existing
-| resource detail pages (Application, Service, Database).
+| These routes add "Resource Backups" sub-pages to Coolify's existing
+| resource configuration pages and server pages.
 |
-| The permissions UI is injected via the InjectPermissionsUI middleware
-| into Coolify's /team/admin page. API routes are in routes/api.php.
+| Application/Database/Service routes point to the same Livewire component
+| Coolify uses for their configuration pages — the overlay view files
+| handle rendering the backup manager when $currentRoute matches.
+|
+| The server route uses our own ResourceBackupPage component.
 |
 */
 
 Route::middleware(['auth'])->group(function () {
-    // Application resource backups
+    // Application resource backups (rendered inside Configuration component via overlay)
     Route::get(
         'project/{project_uuid}/environment/{environment_uuid}/application/{application_uuid}/resource-backups',
-        ResourceBackupPage::class
+        \App\Livewire\Project\Application\Configuration::class
     )->name('project.application.resource-backups');
 
-    // Database resource backups
+    // Database resource backups (rendered inside Configuration component via overlay)
     Route::get(
         'project/{project_uuid}/environment/{environment_uuid}/database/{database_uuid}/resource-backups',
-        ResourceBackupPage::class
+        \App\Livewire\Project\Database\Configuration::class
     )->name('project.database.resource-backups');
 
-    // Service resource backups
+    // Service resource backups (rendered inside Configuration component via overlay)
     Route::get(
         'project/{project_uuid}/environment/{environment_uuid}/service/{service_uuid}/resource-backups',
-        ResourceBackupPage::class
+        \App\Livewire\Project\Service\Configuration::class
     )->name('project.service.resource-backups');
+
+    // Server resource backups (uses our own full-page component)
+    Route::get(
+        'server/{server_uuid}/resource-backups',
+        ResourceBackupPage::class
+    )->name('server.resource-backups');
 });

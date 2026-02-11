@@ -52,6 +52,24 @@ COPY --chown=www-data:www-data src/Overrides/Helpers/databases.php \
 COPY --chown=www-data:www-data src/Overrides/Views/livewire/storage/show.blade.php \
     /var/www/html/resources/views/livewire/storage/show.blade.php
 
+# Override settings backup view to include instance file backup section
+COPY --chown=www-data:www-data src/Overrides/Views/livewire/settings-backup.blade.php \
+    /var/www/html/resources/views/livewire/settings-backup.blade.php
+
+# Override resource configuration views to add Resource Backups sidebar item
+COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/application/configuration.blade.php \
+    /var/www/html/resources/views/livewire/project/application/configuration.blade.php
+
+COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/database/configuration.blade.php \
+    /var/www/html/resources/views/livewire/project/database/configuration.blade.php
+
+COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/service/configuration.blade.php \
+    /var/www/html/resources/views/livewire/project/service/configuration.blade.php
+
+# Override server sidebar to add Resource Backups item
+COPY --chown=www-data:www-data src/Overrides/Views/components/server/sidebar.blade.php \
+    /var/www/html/resources/views/components/server/sidebar.blade.php
+
 # Copy the s6-overlay script for addon migrations
 COPY --chmod=755 docker/s6-overlay/s6-rc.d/addon-migration/ /etc/s6-overlay/s6-rc.d/addon-migration/
 

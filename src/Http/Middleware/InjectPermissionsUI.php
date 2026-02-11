@@ -14,10 +14,13 @@ class InjectPermissionsUI
     /**
      * Inject UI components into Coolify pages:
      * - Access matrix on team admin page
-     * - "Resource Backups" tab on resource detail pages (Application, Service, Database)
      *
-     * Note: Encryption settings are injected via view overlay (not middleware)
-     * to ensure proper Livewire hydration. See src/Overrides/Views/livewire/storage/show.blade.php
+     * Note: Resource backup sidebar items are added via view overlays
+     * (not middleware injection) so they integrate natively with
+     * Coolify's configuration page sidebar and $currentRoute routing.
+     *
+     * Encryption settings are also injected via view overlay.
+     * See src/Overrides/Views/livewire/storage/show.blade.php
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -42,11 +45,6 @@ class InjectPermissionsUI
                 $injections .= $this->wrapWithInjector($component);
             }
         }
-
-        // Always inject backup tab script — JS detects resource pages dynamically.
-        // Must be always-present so it works after SPA navigation (wire:navigate)
-        // from non-resource pages into resource pages.
-        $injections .= $this->buildBackupTabInjector();
 
         if (! empty($injections)) {
             $content = str_replace('</body>', $injections.'</body>', $content);
@@ -77,104 +75,6 @@ class InjectPermissionsUI
         }
 
         return $request->is('team/admin') || $request->is('team');
-    }
-
-    /**
-     * Build the JavaScript that injects a "Resource Backups" tab into the heading nav.
-     *
-     * The URL is computed dynamically from window.location.pathname so it
-     * stays correct across SPA navigations (wire:navigate). No server-side
-     * URL generation needed.
-     */
-    protected function buildBackupTabInjector(): string
-    {
-        return <<<'HTML'
-
-<!-- Coolify Enhanced - Resource Backups Tab -->
-<script data-navigate-once>
-(function() {
-    function injectBackupTab() {
-        // Parse URL to detect resource detail pages
-        // Matches: /project/{uuid}/environment/{uuid}/(application|service|database)/{uuid}
-        var match = window.location.pathname.match(
-            /^(\/project\/[^\/]+\/environment\/[^\/]+\/(application|service|database)\/[^\/]+)/
-        );
-
-        if (!match) {
-            // Not on a resource page — nothing to do.
-            // Livewire replaces content on navigation so any old tab is already gone.
-            return;
-        }
-
-        var backupUrl = match[1] + '/resource-backups';
-        var isActive = window.location.pathname === backupUrl;
-
-        // Find the heading navigation bar containing "Configuration" link
-        var targetNav = null;
-        var navBars = document.querySelectorAll('.navbar-main nav');
-        for (var i = 0; i < navBars.length; i++) {
-            var links = navBars[i].querySelectorAll('a');
-            for (var j = 0; j < links.length; j++) {
-                if (links[j].textContent.trim() === 'Configuration') {
-                    targetNav = navBars[i];
-                    break;
-                }
-            }
-            if (targetNav) break;
-        }
-
-        if (!targetNav) return;
-
-        // If tab already exists, update its URL and active state
-        var existingTab = targetNav.querySelector('[data-enhanced-backup-tab]');
-        if (existingTab) {
-            existingTab.href = backupUrl;
-            existingTab.className = isActive ? 'dark:text-white' : '';
-            return;
-        }
-
-        // Create new tab link
-        var tabLink = document.createElement('a');
-        tabLink.setAttribute('data-enhanced-backup-tab', 'true');
-        tabLink.className = isActive ? 'dark:text-white' : '';
-        tabLink.href = backupUrl;
-        tabLink.setAttribute('wire:navigate', '');
-        tabLink.textContent = 'Resource Backups';
-
-        // Insert before component links (x-applications.links, x-services.links)
-        // which are non-<a> elements at the end of the nav
-        var lastNonLink = null;
-        var children = targetNav.children;
-        for (var k = children.length - 1; k >= 0; k--) {
-            if (children[k].tagName !== 'A') {
-                lastNonLink = children[k];
-                break;
-            }
-        }
-
-        if (lastNonLink) {
-            targetNav.insertBefore(tabLink, lastNonLink);
-        } else {
-            targetNav.appendChild(tabLink);
-        }
-    }
-
-    // Run on initial page load
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', injectBackupTab);
-    } else {
-        injectBackupTab();
-    }
-
-    // Re-run after every Livewire SPA navigation
-    document.addEventListener('livewire:navigated', function() {
-        setTimeout(injectBackupTab, 50);
-    });
-})();
-</script>
-<!-- End Coolify Enhanced - Resource Backups Tab -->
-
-HTML;
     }
 
     /**
