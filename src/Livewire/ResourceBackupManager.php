@@ -123,6 +123,11 @@ class ResourceBackupManager extends Component
         $this->loadBackups();
         $this->loadS3Storages();
 
+        // Auto-select the first S3 storage so it's pre-filled in the form
+        if (! empty($this->availableS3Storages) && is_null($this->s3StorageId)) {
+            $this->s3StorageId = $this->availableS3Storages[0]['id'];
+        }
+
         // Auto-select the first backup so executions are visible immediately
         if (! empty($this->backups)) {
             $this->selectedBackupId = $this->backups[0]['id'];
@@ -206,6 +211,15 @@ class ResourceBackupManager extends Component
     public function createBackup(): void
     {
         try {
+            // Validate S3 storage is selected when S3 is enabled
+            if ($this->saveS3 && empty($this->s3StorageId)) {
+                $this->saveMessage = 'Please select an S3 storage destination.';
+                $this->saveStatus = 'error';
+                $this->dispatch('error', 'Please select an S3 storage destination.');
+
+                return;
+            }
+
             $teamId = auth()->user()->currentTeam()->id;
 
             $data = [
@@ -216,7 +230,7 @@ class ResourceBackupManager extends Component
                 'timeout' => $this->timeout,
                 'save_s3' => $this->saveS3,
                 'disable_local_backup' => $this->disableLocalBackup,
-                's3_storage_id' => $this->saveS3 ? $this->s3StorageId : null,
+                's3_storage_id' => $this->saveS3 ? (int) $this->s3StorageId : null,
                 'retention_amount_locally' => $this->retentionAmountLocally,
                 'retention_days_locally' => $this->retentionDaysLocally,
                 'retention_max_storage_locally' => $this->retentionMaxStorageLocally,
@@ -344,6 +358,13 @@ class ResourceBackupManager extends Component
         }
 
         try {
+            // Validate S3 storage is selected when S3 is enabled
+            if ($this->editSaveS3 && empty($this->editS3StorageId)) {
+                $this->dispatch('error', 'Please select an S3 storage destination.');
+
+                return;
+            }
+
             $backup = ScheduledResourceBackup::findOrFail($this->expandedBackupId);
             $backup->update([
                 'frequency' => $this->editFrequency,
@@ -352,7 +373,7 @@ class ResourceBackupManager extends Component
                 'enabled' => $this->editBackupEnabled,
                 'save_s3' => $this->editSaveS3,
                 'disable_local_backup' => $this->editDisableLocalBackup,
-                's3_storage_id' => $this->editSaveS3 ? $this->editS3StorageId : null,
+                's3_storage_id' => $this->editSaveS3 ? (int) $this->editS3StorageId : null,
                 'retention_amount_locally' => $this->editRetentionAmountLocally,
                 'retention_days_locally' => $this->editRetentionDaysLocally,
                 'retention_max_storage_locally' => $this->editRetentionMaxStorageLocally,
