@@ -63,7 +63,11 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
                 return;
             }
 
+            // Load S3 storage from relationship; fall back to direct lookup
             $this->s3 = $this->backup->s3;
+            if (is_null($this->s3) && $this->backup->s3_storage_id) {
+                $this->s3 = S3Storage::find($this->backup->s3_storage_id);
+            }
             $backupType = $this->backup->backup_type;
 
             // Coolify instance backup doesn't need a resource or server resolved via resource chain
@@ -791,9 +795,12 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
                 $logs[] = '=== S3 Upload ===';
                 try {
                     if (is_null($this->s3)) {
-                        throw new \Exception('S3 storage not configured for this backup schedule. Go to the backup details and select an S3 storage.');
+                        throw new \Exception('S3 storage not configured (s3_storage_id='
+                            .var_export($this->backup->s3_storage_id, true)
+                            .', save_s3='.var_export($this->backup->save_s3, true)
+                            .'). Edit the backup schedule details and select an S3 storage.');
                     }
-                    $logs[] = 'S3 storage: '.($this->s3->name ?? 'ID:'.$this->s3->id);
+                    $logs[] = 'S3 storage: '.($this->s3->name ?? 'ID:'.$this->s3->id).' (id='.$this->s3->id.')';
                     $logs[] = 'Endpoint: '.($this->s3->endpoint ?? 'N/A');
                     $logs[] = 'Bucket: '.($this->s3->bucket ?? 'N/A');
 
@@ -861,7 +868,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
     private function uploadToS3(string $backupLocation, string $backupDir, string $logUuid): void
     {
         if (is_null($this->s3)) {
-            throw new \Exception('S3 storage not configured for this backup schedule. Go to the backup details and select an S3 storage.');
+            throw new \Exception('S3 storage not configured (s3_storage_id='
+                .var_export($this->backup->s3_storage_id, true)
+                .', save_s3='.var_export($this->backup->save_s3, true)
+                .'). Edit the backup schedule details and select an S3 storage.');
         }
 
         $this->s3->testConnection(shouldSave: true);
