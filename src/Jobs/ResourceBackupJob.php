@@ -98,8 +98,7 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
             } elseif ($backupType === ScheduledResourceBackup::TYPE_CONFIGURATION) {
                 $this->backupConfiguration();
             } elseif ($backupType === ScheduledResourceBackup::TYPE_FULL) {
-                $this->backupVolumes();
-                $this->backupConfiguration();
+                $this->backupFull();
             }
 
             // Clean up old backups
@@ -116,13 +115,248 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
     }
 
     /**
+     * Run a full backup (volumes + configuration) as a single execution.
+     */
+    private function backupFull(): void
+    {
+        $resource = $this->backup->resource;
+        if (! $resource) {
+            return;
+        }
+
+        $timestamp = Carbon::now()->timestamp;
+        $backupFileVolumes = "/full-volumes-{$timestamp}.tar.gz";
+        $backupFileConfig = "/full-config-{$timestamp}.json";
+        $volumeBackupLocation = $this->backup_dir.$backupFileVolumes;
+        $configBackupLocation = $this->backup_dir.$backupFileConfig;
+
+        $logUuid = $this->generateUniqueUuid();
+
+        $execution = ScheduledResourceBackupExecution::create([
+            'uuid' => $logUuid,
+            'backup_type' => 'full',
+            'backup_label' => 'full-backup',
+            'filename' => $this->backup_dir."/full-{$timestamp}",
+            'scheduled_resource_backup_id' => $this->backup->id,
+            'local_storage_deleted' => false,
+        ]);
+
+        $logs = [];
+        $totalSize = 0;
+        $hasError = false;
+        $filesToUpload = [];
+
+        try {
+            // === Phase 1: Volume backup ===
+            $logs[] = '=== Phase 1: Docker Volume Backup ===';
+
+            $containers = $this->backup->getContainerNames();
+            if (empty($containers)) {
+                $logs[] = 'No containers found for this resource. Skipping volume backup.';
+                $logs[] = 'Resource type: '.get_class($resource);
+                $logs[] = 'Resource UUID: '.($resource->uuid ?? 'N/A');
+            } else {
+                $logs[] = 'Containers found: '.implode(', ', $containers);
+
+                $volumeCount = 0;
+                foreach ($containers as $containerName) {
+                    $logs[] = "Inspecting container: {$containerName}";
+
+                    $volumeJson = instant_remote_process(
+                        ["docker inspect {$containerName} --format '{{json .Mounts}}' 2>&1 || echo '[]'"],
+                        $this->server,
+                        false,
+                        false,
+                        null,
+                        disableMultiplexing: true
+                    );
+
+                    $trimmedJson = trim($volumeJson);
+                    $mounts = json_decode($trimmedJson, true);
+
+                    if (! is_array($mounts) || empty($mounts)) {
+                        $logs[] = "  No mounts found. Raw output: {$trimmedJson}";
+
+                        continue;
+                    }
+
+                    $backupableMounts = collect($mounts)->filter(function ($mount) {
+                        return in_array($mount['Type'] ?? '', ['volume', 'bind']);
+                    });
+
+                    if ($backupableMounts->isEmpty()) {
+                        $logs[] = '  No backupable volumes (volume/bind) found. Mount types: '.collect($mounts)->pluck('Type')->implode(', ');
+
+                        continue;
+                    }
+
+                    $logs[] = '  Found '.$backupableMounts->count().' backupable mount(s)';
+
+                    // Create a combined tar of all volumes
+                    $commands = ["mkdir -p {$this->backup_dir}"];
+
+                    foreach ($backupableMounts as $mount) {
+                        $volumeName = $mount['Name'] ?? basename($mount['Source'] ?? 'unknown');
+                        $source = $mount['Source'] ?? null;
+                        $type = $mount['Type'] ?? 'unknown';
+
+                        if (! $source) {
+                            $logs[] = "  Skipping mount without source: {$volumeName}";
+
+                            continue;
+                        }
+
+                        $volumeCount++;
+                        $logs[] = "  Backing up {$type} '{$volumeName}' ({$mount['Destination']})";
+
+                        if ($type === 'volume') {
+                            $commands[] = "docker run --rm"
+                                ." -v {$volumeName}:/source:ro"
+                                ." -v {$this->backup_dir}:/backup"
+                                ." alpine tar czf /backup{$backupFileVolumes} -C /source .";
+                        } else {
+                            $escapedSource = escapeshellarg($source);
+                            $commands[] = "tar czf {$volumeBackupLocation} -C {$escapedSource} .";
+                        }
+                    }
+
+                    if (count($commands) > 1) {
+                        $output = instant_remote_process($commands, $this->server, true, false, $this->timeout, disableMultiplexing: true);
+                        if ($output) {
+                            $logs[] = '  Command output: '.trim($output);
+                        }
+                    }
+                }
+
+                if ($volumeCount > 0) {
+                    $volSize = $this->calculateSize($volumeBackupLocation);
+                    if ($volSize > 0) {
+                        $totalSize += $volSize;
+                        $filesToUpload[] = $volumeBackupLocation;
+                        $logs[] = "Volume backup complete. Size: {$this->formatBytes($volSize)}";
+                    } else {
+                        $logs[] = 'Warning: Volume backup file is empty or missing.';
+                        $hasError = true;
+                    }
+                } else {
+                    $logs[] = 'No volumes were backed up.';
+                }
+            }
+
+            // === Phase 2: Configuration backup ===
+            $logs[] = '';
+            $logs[] = '=== Phase 2: Configuration Export ===';
+
+            $configData = $this->exportResourceConfig($resource);
+            $jsonContent = json_encode($configData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            $encoded = base64_encode($jsonContent);
+
+            $commands = [
+                "mkdir -p {$this->backup_dir}",
+                "echo '{$encoded}' | base64 -d > {$configBackupLocation}",
+            ];
+
+            instant_remote_process($commands, $this->server, true, false, null, disableMultiplexing: true);
+            $configSize = $this->calculateSize($configBackupLocation);
+
+            if ($configSize > 0) {
+                $totalSize += $configSize;
+                $filesToUpload[] = $configBackupLocation;
+                $logs[] = "Configuration export complete. Size: {$this->formatBytes($configSize)}";
+            } else {
+                $logs[] = 'Warning: Configuration backup file is empty.';
+                $hasError = true;
+            }
+
+            // === Phase 3: S3 Upload ===
+            $isEncrypted = false;
+            $localStorageDeleted = false;
+
+            if ($this->backup->save_s3 && ! empty($filesToUpload)) {
+                $logs[] = '';
+                $logs[] = '=== Phase 3: S3 Upload ===';
+
+                foreach ($filesToUpload as $filePath) {
+                    try {
+                        $logs[] = 'Uploading: '.basename($filePath);
+                        $this->uploadToS3($filePath, $this->backup_dir.'/', $logUuid);
+                        $isEncrypted = RcloneService::isEncryptionEnabled($this->s3);
+                        $logs[] = '  Uploaded successfully'.($isEncrypted ? ' (encrypted)' : '');
+                    } catch (\Throwable $e) {
+                        $logs[] = '  S3 upload FAILED: '.$e->getMessage();
+                        $hasError = true;
+                    }
+                }
+
+                if ($this->s3_uploaded && $this->backup->disable_local_backup) {
+                    foreach ($filesToUpload as $filePath) {
+                        $this->deleteLocalFile($filePath);
+                    }
+                    $localStorageDeleted = true;
+                    $logs[] = 'Local files deleted after S3 upload.';
+                }
+            }
+
+            $updateData = [
+                'status' => $hasError ? 'failed' : 'success',
+                'message' => implode("\n", $logs),
+                'size' => $totalSize,
+                's3_uploaded' => $this->backup->save_s3 ? $this->s3_uploaded : null,
+                'local_storage_deleted' => $localStorageDeleted,
+            ];
+
+            if ($this->s3_uploaded) {
+                $updateData['is_encrypted'] = $isEncrypted;
+            }
+
+            $execution->update($updateData);
+        } catch (\Throwable $e) {
+            $logs[] = '';
+            $logs[] = 'FATAL ERROR: '.$e->getMessage();
+            $execution->update([
+                'status' => 'failed',
+                'message' => implode("\n", $logs),
+                'size' => $totalSize,
+                'filename' => null,
+                's3_uploaded' => null,
+                'finished_at' => Carbon::now(),
+            ]);
+        } finally {
+            $execution->update(['finished_at' => Carbon::now()]);
+            $this->s3_uploaded = false;
+        }
+    }
+
+    /**
      * Backup Docker volumes for the resource's containers.
      */
     private function backupVolumes(): void
     {
         $containers = $this->backup->getContainerNames();
         if (empty($containers)) {
-            Log::info('ResourceBackup: No containers found for volume backup');
+            // Create a failed execution record so the user knows volumes were not found
+            $resource = $this->backup->resource;
+            $logs = [
+                'No containers found for volume backup.',
+                'Resource type: '.($resource ? get_class($resource) : 'N/A'),
+                'Resource UUID: '.($resource?->uuid ?? 'N/A'),
+                '',
+                'This usually means the application is not deployed or the container is not running.',
+                'Ensure the application is deployed and running before scheduling volume backups.',
+            ];
+
+            ScheduledResourceBackupExecution::create([
+                'uuid' => $this->generateUniqueUuid(),
+                'backup_type' => 'volume',
+                'backup_label' => 'no-containers-found',
+                'status' => 'failed',
+                'message' => implode("\n", $logs),
+                'size' => 0,
+                'filename' => null,
+                'scheduled_resource_backup_id' => $this->backup->id,
+                'local_storage_deleted' => false,
+                'finished_at' => Carbon::now(),
+            ]);
 
             return;
         }
@@ -143,7 +377,7 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
     {
         // Get volume mounts from container inspection
         $volumeJson = instant_remote_process(
-            ["docker inspect {$containerName} --format '{{json .Mounts}}' 2>/dev/null || echo '[]'"],
+            ["docker inspect {$containerName} --format '{{json .Mounts}}' 2>&1 || echo '[]'"],
             $this->server,
             false,
             false,
@@ -151,9 +385,22 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
             disableMultiplexing: true
         );
 
-        $mounts = json_decode(trim($volumeJson), true);
+        $trimmedJson = trim($volumeJson);
+        $mounts = json_decode($trimmedJson, true);
         if (! is_array($mounts) || empty($mounts)) {
-            Log::info("ResourceBackup: No volumes found for container {$containerName}");
+            // Create an informational record so the user can see what happened
+            ScheduledResourceBackupExecution::create([
+                'uuid' => $this->generateUniqueUuid(),
+                'backup_type' => 'volume',
+                'backup_label' => $containerName,
+                'status' => 'failed',
+                'message' => "No volumes found for container '{$containerName}'.\n\nDocker inspect output:\n{$trimmedJson}\n\nEnsure the container is running and has mounted volumes.",
+                'size' => 0,
+                'filename' => null,
+                'scheduled_resource_backup_id' => $this->backup->id,
+                'local_storage_deleted' => false,
+                'finished_at' => Carbon::now(),
+            ]);
 
             return;
         }
@@ -164,7 +411,18 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
         });
 
         if ($backupableMounts->isEmpty()) {
-            Log::info("ResourceBackup: No backupable volumes for container {$containerName}");
+            ScheduledResourceBackupExecution::create([
+                'uuid' => $this->generateUniqueUuid(),
+                'backup_type' => 'volume',
+                'backup_label' => $containerName,
+                'status' => 'failed',
+                'message' => "No backupable volumes (type=volume or bind) found for container '{$containerName}'.\n\nMounts found: ".json_encode($mounts, JSON_PRETTY_PRINT),
+                'size' => 0,
+                'filename' => null,
+                'scheduled_resource_backup_id' => $this->backup->id,
+                'local_storage_deleted' => false,
+                'finished_at' => Carbon::now(),
+            ]);
 
             return;
         }
@@ -205,6 +463,13 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
             'local_storage_deleted' => false,
         ]);
 
+        $logs = [
+            "Backing up {$type} volume '{$volumeName}'",
+            "Container: {$containerName}",
+            "Source: {$source}",
+            "Destination: {$destination}",
+        ];
+
         try {
             $commands = [];
             $commands[] = "mkdir -p {$this->backup_dir}";
@@ -222,11 +487,17 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
             }
 
             $output = instant_remote_process($commands, $this->server, true, false, $this->timeout, disableMultiplexing: true);
+            if ($output) {
+                $logs[] = 'Output: '.trim($output);
+            }
+
             $size = $this->calculateSize($backupLocation);
 
             if ($size <= 0) {
                 throw new \Exception('Backup file is empty or was not created');
             }
+
+            $logs[] = "Backup created: {$backupLocation} ({$this->formatBytes($size)})";
 
             // Upload to S3 if enabled
             $isEncrypted = false;
@@ -235,26 +506,25 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
             if ($this->backup->save_s3) {
                 try {
+                    $logs[] = 'Uploading to S3...';
                     $this->uploadToS3($backupLocation, $this->backup_dir.'/', $logUuid);
                     $isEncrypted = RcloneService::isEncryptionEnabled($this->s3);
+                    $logs[] = 'S3 upload successful'.($isEncrypted ? ' (encrypted)' : '');
 
                     if ($this->backup->disable_local_backup) {
                         $this->deleteLocalFile($backupLocation);
                         $localStorageDeleted = true;
+                        $logs[] = 'Local file deleted after S3 upload';
                     }
                 } catch (\Throwable $e) {
                     $s3UploadError = $e->getMessage();
+                    $logs[] = 'S3 upload FAILED: '.$s3UploadError;
                 }
-            }
-
-            $message = $output ? trim($output) : null;
-            if ($s3UploadError) {
-                $message = ($message ? $message."\n\n" : '')."Warning: S3 upload failed: {$s3UploadError}";
             }
 
             $updateData = [
                 'status' => 'success',
-                'message' => $message,
+                'message' => implode("\n", $logs),
                 'size' => $size,
                 's3_uploaded' => $this->backup->save_s3 ? $this->s3_uploaded : null,
                 'local_storage_deleted' => $localStorageDeleted,
@@ -266,9 +536,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
             $execution->update($updateData);
         } catch (\Throwable $e) {
+            $logs[] = 'FAILED: '.$e->getMessage();
             $execution->update([
                 'status' => 'failed',
-                'message' => $this->error_output ?? $e->getMessage(),
+                'message' => implode("\n", $logs),
                 'size' => 0,
                 'filename' => null,
                 's3_uploaded' => null,
@@ -305,6 +576,8 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
             'local_storage_deleted' => false,
         ]);
 
+        $logs = ['Exporting resource configuration...'];
+
         try {
             $configData = $this->exportResourceConfig($resource);
             $jsonContent = json_encode($configData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -323,6 +596,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
                 throw new \Exception('Configuration backup file is empty');
             }
 
+            $logs[] = "Configuration exported: {$backupLocation} ({$this->formatBytes($size)})";
+            $exportedKeys = array_keys($configData);
+            $logs[] = 'Sections: '.implode(', ', $exportedKeys);
+
             // Upload to S3 if enabled
             $isEncrypted = false;
             $s3UploadError = null;
@@ -330,26 +607,25 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
             if ($this->backup->save_s3) {
                 try {
+                    $logs[] = 'Uploading to S3...';
                     $this->uploadToS3($backupLocation, $this->backup_dir.'/', $logUuid);
                     $isEncrypted = RcloneService::isEncryptionEnabled($this->s3);
+                    $logs[] = 'S3 upload successful'.($isEncrypted ? ' (encrypted)' : '');
 
                     if ($this->backup->disable_local_backup) {
                         $this->deleteLocalFile($backupLocation);
                         $localStorageDeleted = true;
+                        $logs[] = 'Local file deleted after S3 upload';
                     }
                 } catch (\Throwable $e) {
                     $s3UploadError = $e->getMessage();
+                    $logs[] = 'S3 upload FAILED: '.$s3UploadError;
                 }
-            }
-
-            $message = null;
-            if ($s3UploadError) {
-                $message = "Warning: S3 upload failed: {$s3UploadError}";
             }
 
             $updateData = [
                 'status' => 'success',
-                'message' => $message,
+                'message' => implode("\n", $logs),
                 'size' => $size,
                 's3_uploaded' => $this->backup->save_s3 ? $this->s3_uploaded : null,
                 'local_storage_deleted' => $localStorageDeleted,
@@ -361,9 +637,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
             $execution->update($updateData);
         } catch (\Throwable $e) {
+            $logs[] = 'FAILED: '.$e->getMessage();
             $execution->update([
                 'status' => 'failed',
-                'message' => $e->getMessage(),
+                'message' => implode("\n", $logs),
                 'size' => 0,
                 'filename' => null,
                 's3_uploaded' => null,
@@ -469,6 +746,12 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
             'local_storage_deleted' => false,
         ]);
 
+        $logs = [
+            'Backing up Coolify instance files...',
+            "Source: {$baseDir}",
+            "Destination: {$backupLocation}",
+        ];
+
         try {
             // Exclude backups (avoids backup-of-backups duplication),
             // metrics (ephemeral monitoring data), and common temp dirs
@@ -482,43 +765,60 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
             $commands = [
                 "mkdir -p {$this->backup_dir}",
-                "tar czf {$backupLocation} {$excludeStr} -C {$baseDir} .",
+                "tar czf {$backupLocation} {$excludeStr} -C {$baseDir} . 2>&1",
             ];
 
             $output = instant_remote_process($commands, $this->server, true, false, $this->timeout, disableMultiplexing: true);
+            if ($output) {
+                $logs[] = 'tar output: '.trim($output);
+            }
+
             $size = $this->calculateSize($backupLocation);
 
             if ($size <= 0) {
                 throw new \Exception('Coolify instance backup file is empty or was not created');
             }
 
+            $logs[] = "Backup created: {$this->formatBytes($size)}";
+            $logs[] = "Excluded: backups/, metrics/, tmp/, .cache/";
+
             // Upload to S3 if enabled
             $isEncrypted = false;
-            $s3UploadError = null;
             $localStorageDeleted = false;
 
             if ($this->backup->save_s3) {
+                $logs[] = '';
+                $logs[] = '=== S3 Upload ===';
                 try {
-                    $this->uploadToS3($backupLocation, $this->backup_dir.'/', $logUuid);
+                    if (is_null($this->s3)) {
+                        throw new \Exception('S3 storage not configured for this backup schedule. Go to the backup details and select an S3 storage.');
+                    }
+                    $logs[] = 'S3 storage: '.($this->s3->name ?? 'ID:'.$this->s3->id);
+                    $logs[] = 'Endpoint: '.($this->s3->endpoint ?? 'N/A');
+                    $logs[] = 'Bucket: '.($this->s3->bucket ?? 'N/A');
+
+                    $logs[] = 'Testing S3 connection...';
+                    $this->s3->testConnection(shouldSave: true);
+                    $logs[] = 'S3 connection OK';
+
+                    $logs[] = 'Uploading to S3...';
+                    $this->doUploadToS3($backupLocation, $this->backup_dir.'/', $logUuid, $logs);
                     $isEncrypted = RcloneService::isEncryptionEnabled($this->s3);
+                    $logs[] = 'S3 upload successful'.($isEncrypted ? ' (encrypted)' : '');
 
                     if ($this->backup->disable_local_backup) {
                         $this->deleteLocalFile($backupLocation);
                         $localStorageDeleted = true;
+                        $logs[] = 'Local file deleted after S3 upload';
                     }
                 } catch (\Throwable $e) {
-                    $s3UploadError = $e->getMessage();
+                    $logs[] = 'S3 upload FAILED: '.$e->getMessage();
                 }
-            }
-
-            $message = $output ? trim($output) : null;
-            if ($s3UploadError) {
-                $message = ($message ? $message."\n\n" : '')."Warning: S3 upload failed: {$s3UploadError}";
             }
 
             $updateData = [
                 'status' => 'success',
-                'message' => $message,
+                'message' => implode("\n", $logs),
                 'size' => $size,
                 's3_uploaded' => $this->backup->save_s3 ? $this->s3_uploaded : null,
                 'local_storage_deleted' => $localStorageDeleted,
@@ -530,9 +830,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
             $execution->update($updateData);
         } catch (\Throwable $e) {
+            $logs[] = 'FATAL ERROR: '.$e->getMessage();
             $execution->update([
                 'status' => 'failed',
-                'message' => $e->getMessage(),
+                'message' => implode("\n", $logs),
                 'size' => 0,
                 'filename' => null,
                 's3_uploaded' => null,
@@ -555,11 +856,12 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
 
     /**
      * Upload a backup file to S3, using encryption if enabled.
+     * This is the wrapper used by volume/config backups.
      */
     private function uploadToS3(string $backupLocation, string $backupDir, string $logUuid): void
     {
         if (is_null($this->s3)) {
-            return;
+            throw new \Exception('S3 storage not configured for this backup schedule. Go to the backup details and select an S3 storage.');
         }
 
         $this->s3->testConnection(shouldSave: true);
@@ -570,6 +872,24 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
         if (RcloneService::isEncryptionEnabled($this->s3)) {
             $this->uploadToS3Encrypted($backupLocation, $backupDir, $logUuid, $network);
         } else {
+            $this->uploadToS3Unencrypted($backupLocation, $backupDir, $logUuid, $network);
+        }
+
+        $this->s3_uploaded = true;
+    }
+
+    /**
+     * Upload a backup file to S3 with detailed logging (used by instance backups).
+     */
+    private function doUploadToS3(string $backupLocation, string $backupDir, string $logUuid, array &$logs): void
+    {
+        $network = $this->resolveNetwork();
+
+        if (RcloneService::isEncryptionEnabled($this->s3)) {
+            $logs[] = 'Using rclone (encryption enabled)';
+            $this->uploadToS3Encrypted($backupLocation, $backupDir, $logUuid, $network);
+        } else {
+            $logs[] = 'Using mc (MinIO client)';
             $this->uploadToS3Unencrypted($backupLocation, $backupDir, $logUuid, $network);
         }
 
@@ -599,7 +919,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
                 $network
             );
 
-            instant_remote_process($commands, $this->server, true, false, null, disableMultiplexing: true);
+            $output = instant_remote_process($commands, $this->server, true, false, null, disableMultiplexing: true);
+            if ($output) {
+                Log::info('ResourceBackup rclone output: '.trim($output));
+            }
         } finally {
             $cleanupCommands = RcloneService::buildCleanupCommands($containerName);
             instant_remote_process($cleanupCommands, $this->server, false, false, null, disableMultiplexing: true);
@@ -650,7 +973,10 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
         $commands[] = "docker exec {$containerName} mc cp {$escapedBackupLocation} {$escapedS3Path}";
 
         try {
-            instant_remote_process($commands, $this->server, true, false, null, disableMultiplexing: true);
+            $output = instant_remote_process($commands, $this->server, true, false, null, disableMultiplexing: true);
+            if ($output) {
+                Log::info('ResourceBackup mc output: '.trim($output));
+            }
         } finally {
             instant_remote_process(["docker rm -f {$containerName}"], $this->server, false, false, null, disableMultiplexing: true);
         }
@@ -672,7 +998,7 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
         }
 
         // Fallback: try destination relationship
-        if (method_exists($resource, 'destination') && $resource->destination) {
+        if ($resource && method_exists($resource, 'destination') && $resource->destination) {
             return $resource->destination->network;
         }
 
@@ -725,6 +1051,17 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
         } else {
             $this->error_output = $output;
         }
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        if ($bytes === 0) {
+            return '0 B';
+        }
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $i = floor(log($bytes, 1024));
+
+        return round($bytes / pow(1024, $i), 2).' '.$units[$i];
     }
 
     /**

@@ -57,7 +57,7 @@
                     </div>
                 </div>
 
-                {{-- Expanded details panel --}}
+                {{-- Expanded details panel (settings only, no executions) --}}
                 @if($expandedBackupId === $backup['id'])
                     <div class="border border-t-0 dark:border-coolgray-300 rounded-b p-4 dark:bg-coolgray-100 bg-white">
                         <form wire:submit="saveBackupSettings">
@@ -141,164 +141,166 @@
                                 </div>
                             </div>
                         </form>
-
-                        {{-- ============================================================ --}}
-                        {{-- EXECUTIONS for this schedule (Coolify-style cards)            --}}
-                        {{-- ============================================================ --}}
-                        <div class="mt-6 pt-6 border-t dark:border-coolgray-300">
-                            <div class="flex items-center gap-2">
-                                <h3 class="py-2">Executions <span class="text-xs">({{ $executionCount }})</span></h3>
-                                @if ($executionCount > 0)
-                                    <div class="flex items-center gap-2">
-                                        <x-forms.button disabled="{{ $executionSkip <= 0 }}" wire:click="previousExecutionPage">
-                                            <svg class="w-4 h-4" viewBox="0 0 24 24">
-                                                <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14 6l-6 6l6 6z" />
-                                            </svg>
-                                        </x-forms.button>
-                                        <span class="text-sm text-gray-600 dark:text-gray-400 px-2">
-                                            Page {{ floor($executionSkip / $executionTake) + 1 }} of {{ max(1, ceil($executionCount / $executionTake)) }}
-                                        </span>
-                                        <x-forms.button disabled="{{ ($executionSkip + $executionTake) >= $executionCount }}" wire:click="nextExecutionPage">
-                                            <svg class="w-4 h-4" viewBox="0 0 24 24">
-                                                <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m10 18l6-6l-6-6z" />
-                                            </svg>
-                                        </x-forms.button>
-                                    </div>
-                                @endif
-                                <x-forms.button wire:click='cleanupFailed'>Cleanup Failed Backups</x-forms.button>
-                            </div>
-                            <div @if ($executionSkip === 0) wire:poll.5000ms="refreshExecutions" @endif class="flex flex-col gap-4 mt-2">
-                                @forelse($executions as $execution)
-                                    <div wire:key="exec-{{ $execution['id'] }}" @class([
-                                        'flex flex-col border-l-2 transition-colors p-4 bg-white dark:bg-coolgray-100 text-black dark:text-white',
-                                        'border-blue-500/50 border-dashed' => $execution['status'] === 'running',
-                                        'border-error' => $execution['status'] === 'failed',
-                                        'border-success' => $execution['status'] === 'success',
-                                    ])>
-                                        {{-- Status badge --}}
-                                        <div class="flex items-center gap-2 mb-2">
-                                            <span @class([
-                                                'px-3 py-1 rounded-md text-xs font-medium tracking-wide shadow-xs',
-                                                'bg-blue-100/80 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' => $execution['status'] === 'running',
-                                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200' => $execution['status'] === 'failed',
-                                                'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200' => $execution['status'] === 'success' && $execution['s3_uploaded'] === false,
-                                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' => $execution['status'] === 'success' && $execution['s3_uploaded'] !== false,
-                                            ])>
-                                                @php
-                                                    $statusText = match ($execution['status']) {
-                                                        'success' => $execution['s3_uploaded'] === false ? 'Success (S3 Warning)' : 'Success',
-                                                        'running' => 'In Progress',
-                                                        'failed' => 'Failed',
-                                                        default => ucfirst($execution['status']),
-                                                    };
-                                                @endphp
-                                                {{ $statusText }}
-                                            </span>
-                                            @if($execution['backup_label'])
-                                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ $execution['backup_label'] }}</span>
-                                            @endif
-                                        </div>
-
-                                        {{-- Metadata --}}
-                                        <div class="text-gray-600 dark:text-gray-400 text-sm">
-                                            @if ($execution['status'] === 'running')
-                                                Running...
-                                            @else
-                                                {{ $execution['finished_at_human'] ?? $execution['created_at_human'] }}
-                                                @if($execution['duration'])
-                                                    ({{ $execution['duration'] }})
-                                                @endif
-                                                @if($execution['finished_at_formatted'])
-                                                    &bull; {{ $execution['finished_at_formatted'] }}
-                                                @endif
-                                            @endif
-                                            @if($execution['size_formatted'])
-                                                &bull; Size: {{ $execution['size_formatted'] }}
-                                            @endif
-                                        </div>
-
-                                        {{-- Location --}}
-                                        @if($execution['filename'])
-                                            <div class="text-gray-600 dark:text-gray-400 text-sm">
-                                                Location: {{ $execution['filename'] }}
-                                            </div>
-                                        @endif
-
-                                        {{-- Backup Availability badges --}}
-                                        <div class="flex items-center gap-3 mt-2">
-                                            <div class="text-gray-600 dark:text-gray-400 text-sm">Backup Availability:</div>
-
-                                            {{-- Local Storage badge --}}
-                                            <span @class([
-                                                'px-2 py-1 rounded-sm text-xs font-medium',
-                                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' => !$execution['local_storage_deleted'],
-                                                'bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400' => $execution['local_storage_deleted'],
-                                            ])>
-                                                <span class="flex items-center gap-1">
-                                                    @if (!$execution['local_storage_deleted'])
-                                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
-                                                    @endif
-                                                    Local Storage
-                                                </span>
-                                            </span>
-
-                                            {{-- S3 Storage badge --}}
-                                            @if ($execution['s3_uploaded'] !== null)
-                                                <span @class([
-                                                    'px-2 py-1 rounded-sm text-xs font-medium',
-                                                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200' => $execution['s3_uploaded'] === false && !$execution['s3_storage_deleted'],
-                                                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' => $execution['s3_uploaded'] === true && !$execution['s3_storage_deleted'],
-                                                    'bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400' => $execution['s3_storage_deleted'],
-                                                ])>
-                                                    <span class="flex items-center gap-1">
-                                                        @if ($execution['s3_uploaded'] === true && !$execution['s3_storage_deleted'])
-                                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
-                                                        @else
-                                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
-                                                        @endif
-                                                        S3 Storage
-                                                    </span>
-                                                </span>
-                                            @endif
-
-                                            {{-- Encrypted badge --}}
-                                            @if ($execution['is_encrypted'])
-                                                <span class="px-2 py-1 rounded-sm text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200">
-                                                    <span class="flex items-center gap-1">
-                                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                                                        Encrypted
-                                                    </span>
-                                                </span>
-                                            @endif
-                                        </div>
-
-                                        {{-- Error/log message --}}
-                                        @if ($execution['message'])
-                                            <div class="mt-2 p-2 bg-gray-100 dark:bg-coolgray-200 rounded-sm">
-                                                <pre class="whitespace-pre-wrap text-sm">{{ $execution['message'] }}</pre>
-                                            </div>
-                                        @endif
-
-                                        {{-- Action buttons --}}
-                                        <div class="flex gap-2 mt-4">
-                                            <x-forms.button isSmall isError
-                                                wire:click="deleteExecution({{ $execution['id'] }})"
-                                                wire:confirm="Are you sure you want to delete this backup execution?">
-                                                Delete
-                                            </x-forms.button>
-                                        </div>
-                                    </div>
-                                @empty
-                                    <div class="p-4 bg-gray-100 dark:bg-coolgray-100 rounded-sm">No executions found.</div>
-                                @endforelse
-                            </div>
-                        </div>
                     </div>
                 @endif
             </div>
         @endforeach
+    @endif
+
+    {{-- ============================================================ --}}
+    {{-- EXECUTIONS (standalone section, below all schedules)          --}}
+    {{-- ============================================================ --}}
+    @if($selectedBackupId)
+        <div class="py-4">
+            <div class="flex items-center gap-2">
+                <h3 class="py-2">Executions <span class="text-xs">({{ $executionCount }})</span></h3>
+                @if ($executionCount > 0)
+                    <div class="flex items-center gap-2">
+                        <x-forms.button disabled="{{ $executionSkip <= 0 }}" wire:click="previousExecutionPage">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24">
+                                <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14 6l-6 6l6 6z" />
+                            </svg>
+                        </x-forms.button>
+                        <span class="text-sm text-gray-600 dark:text-gray-400 px-2">
+                            Page {{ floor($executionSkip / $executionTake) + 1 }} of {{ max(1, ceil($executionCount / $executionTake)) }}
+                        </span>
+                        <x-forms.button disabled="{{ ($executionSkip + $executionTake) >= $executionCount }}" wire:click="nextExecutionPage">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24">
+                                <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m10 18l6-6l-6-6z" />
+                            </svg>
+                        </x-forms.button>
+                    </div>
+                @endif
+                <x-forms.button wire:click='cleanupFailed'>Cleanup Failed Backups</x-forms.button>
+            </div>
+            <div @if ($executionSkip === 0) wire:poll.5000ms="refreshExecutions" @endif class="flex flex-col gap-4 mt-2">
+                @forelse($executions as $execution)
+                    <div wire:key="exec-{{ $execution['id'] }}" @class([
+                        'flex flex-col border-l-2 transition-colors p-4 bg-white dark:bg-coolgray-100 text-black dark:text-white',
+                        'border-blue-500/50 border-dashed' => $execution['status'] === 'running',
+                        'border-error' => $execution['status'] === 'failed',
+                        'border-success' => $execution['status'] === 'success',
+                    ])>
+                        {{-- Status badge --}}
+                        <div class="flex items-center gap-2 mb-2">
+                            <span @class([
+                                'px-3 py-1 rounded-md text-xs font-medium tracking-wide shadow-xs',
+                                'bg-blue-100/80 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' => $execution['status'] === 'running',
+                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200' => $execution['status'] === 'failed',
+                                'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200' => $execution['status'] === 'success' && $execution['s3_uploaded'] === false,
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' => $execution['status'] === 'success' && $execution['s3_uploaded'] !== false,
+                            ])>
+                                @php
+                                    $statusText = match ($execution['status']) {
+                                        'success' => $execution['s3_uploaded'] === false ? 'Success (S3 Warning)' : 'Success',
+                                        'running' => 'In Progress',
+                                        'failed' => 'Failed',
+                                        default => ucfirst($execution['status']),
+                                    };
+                                @endphp
+                                {{ $statusText }}
+                            </span>
+                            @if($execution['backup_label'])
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ $execution['backup_label'] }}</span>
+                            @endif
+                        </div>
+
+                        {{-- Metadata --}}
+                        <div class="text-gray-600 dark:text-gray-400 text-sm">
+                            @if ($execution['status'] === 'running')
+                                Running...
+                            @else
+                                {{ $execution['finished_at_human'] ?? $execution['created_at_human'] }}
+                                @if($execution['duration'])
+                                    ({{ $execution['duration'] }})
+                                @endif
+                                @if($execution['finished_at_formatted'])
+                                    &bull; {{ $execution['finished_at_formatted'] }}
+                                @endif
+                            @endif
+                            @if($execution['size_formatted'])
+                                &bull; Size: {{ $execution['size_formatted'] }}
+                            @endif
+                        </div>
+
+                        {{-- Location --}}
+                        @if($execution['filename'])
+                            <div class="text-gray-600 dark:text-gray-400 text-sm">
+                                Location: {{ $execution['filename'] }}
+                            </div>
+                        @endif
+
+                        {{-- Backup Availability badges --}}
+                        <div class="flex items-center gap-3 mt-2">
+                            <div class="text-gray-600 dark:text-gray-400 text-sm">Backup Availability:</div>
+
+                            {{-- Local Storage badge --}}
+                            <span @class([
+                                'px-2 py-1 rounded-sm text-xs font-medium',
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' => !$execution['local_storage_deleted'],
+                                'bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400' => $execution['local_storage_deleted'],
+                            ])>
+                                <span class="flex items-center gap-1">
+                                    @if (!$execution['local_storage_deleted'])
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                                    @else
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                                    @endif
+                                    Local Storage
+                                </span>
+                            </span>
+
+                            {{-- S3 Storage badge --}}
+                            @if ($execution['s3_uploaded'] !== null)
+                                <span @class([
+                                    'px-2 py-1 rounded-sm text-xs font-medium',
+                                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200' => $execution['s3_uploaded'] === false && !$execution['s3_storage_deleted'],
+                                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' => $execution['s3_uploaded'] === true && !$execution['s3_storage_deleted'],
+                                    'bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400' => $execution['s3_storage_deleted'],
+                                ])>
+                                    <span class="flex items-center gap-1">
+                                        @if ($execution['s3_uploaded'] === true && !$execution['s3_storage_deleted'])
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                                        @else
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                                        @endif
+                                        S3 Storage
+                                    </span>
+                                </span>
+                            @endif
+
+                            {{-- Encrypted badge --}}
+                            @if ($execution['is_encrypted'])
+                                <span class="px-2 py-1 rounded-sm text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200">
+                                    <span class="flex items-center gap-1">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                        Encrypted
+                                    </span>
+                                </span>
+                            @endif
+                        </div>
+
+                        {{-- Error/log message --}}
+                        @if ($execution['message'])
+                            <div class="mt-2 p-2 bg-gray-100 dark:bg-coolgray-200 rounded-sm">
+                                <pre class="whitespace-pre-wrap text-sm">{{ $execution['message'] }}</pre>
+                            </div>
+                        @endif
+
+                        {{-- Action buttons --}}
+                        <div class="flex gap-2 mt-4">
+                            <x-forms.button isSmall isError
+                                wire:click="deleteExecution({{ $execution['id'] }})"
+                                wire:confirm="Are you sure you want to delete this backup execution?">
+                                Delete
+                            </x-forms.button>
+                        </div>
+                    </div>
+                @empty
+                    <div class="p-4 bg-gray-100 dark:bg-coolgray-100 rounded-sm">No executions found.</div>
+                @endforelse
+            </div>
+        </div>
     @endif
 
     {{-- ============================================================ --}}

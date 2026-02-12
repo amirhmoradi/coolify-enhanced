@@ -122,6 +122,12 @@ class ResourceBackupManager extends Component
 
         $this->loadBackups();
         $this->loadS3Storages();
+
+        // Auto-select the first backup so executions are visible immediately
+        if (! empty($this->backups)) {
+            $this->selectedBackupId = $this->backups[0]['id'];
+            $this->loadExecutions();
+        }
     }
 
     public function loadBackups(): void
@@ -248,6 +254,12 @@ class ResourceBackupManager extends Component
         try {
             $backup = ScheduledResourceBackup::findOrFail($backupId);
             ResourceBackupJob::dispatch($backup);
+
+            // Select this backup so executions section shows its progress
+            $this->selectedBackupId = $backupId;
+            $this->executionSkip = 0;
+            $this->loadExecutions();
+
             $this->dispatch('success', 'Backup job dispatched. Check executions for progress.');
         } catch (\Throwable $e) {
             $this->dispatch('error', 'Failed to dispatch backup.', $e->getMessage());
