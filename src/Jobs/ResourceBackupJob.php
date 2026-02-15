@@ -219,8 +219,11 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
                                 ." -v {$this->backup_dir}:/backup"
                                 ." alpine tar czf /backup{$backupFileVolumes} -C /source .";
                         } else {
+                            // Bind mount: could be a directory or a single file
                             $escapedSource = escapeshellarg($source);
-                            $commands[] = "tar czf {$volumeBackupLocation} -C {$escapedSource} .";
+                            $escapedDir = escapeshellarg(dirname($source));
+                            $escapedBase = escapeshellarg(basename($source));
+                            $commands[] = "if [ -d {$escapedSource} ]; then tar czf {$volumeBackupLocation} -C {$escapedSource} .; else tar czf {$volumeBackupLocation} -C {$escapedDir} {$escapedBase}; fi";
                         }
                     }
 
@@ -485,9 +488,11 @@ class ResourceBackupJob implements ShouldBeEncrypted, ShouldQueue
                     ." -v {$this->backup_dir}:/backup"
                     ." alpine tar czf /backup{$backupFile} -C /source .";
             } else {
-                // Bind mount - tar the source directory directly
+                // Bind mount - could be a directory or a single file
                 $escapedSource = escapeshellarg($source);
-                $commands[] = "tar czf {$backupLocation} -C {$escapedSource} .";
+                $escapedDir = escapeshellarg(dirname($source));
+                $escapedBase = escapeshellarg(basename($source));
+                $commands[] = "if [ -d {$escapedSource} ]; then tar czf {$backupLocation} -C {$escapedSource} .; else tar czf {$backupLocation} -C {$escapedDir} {$escapedBase}; fi";
             }
 
             $output = instant_remote_process($commands, $this->server, true, false, $this->timeout, disableMultiplexing: true);
