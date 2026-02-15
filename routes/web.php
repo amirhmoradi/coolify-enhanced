@@ -1,6 +1,7 @@
 <?php
 
 use AmirhMoradi\CoolifyEnhanced\Livewire\ResourceBackupPage;
+use AmirhMoradi\CoolifyEnhanced\Livewire\RestoreBackup;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,4 +44,8 @@ Route::middleware(['web', 'auth', 'verified'])->group(function () {
         'server/{server_uuid}/resource-backups',
         ResourceBackupPage::class
     )->name('server.resource-backups');
+
+    // Settings: Restore/Import Backups page
+    Route::get('settings/restore-backup', RestoreBackup::class)
+        ->name('settings.restore-backup');
 });

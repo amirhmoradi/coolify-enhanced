@@ -70,6 +70,10 @@ COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/service/conf
 COPY --chown=www-data:www-data src/Overrides/Views/components/server/sidebar.blade.php \
     /var/www/html/resources/views/components/server/sidebar.blade.php
 
+# Override settings navbar to add Restore tab
+COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.blade.php \
+    /var/www/html/resources/views/components/settings/navbar.blade.php
+
 # Copy the s6-overlay script for addon migrations
 COPY --chmod=755 docker/s6-overlay/s6-rc.d/addon-migration/ /etc/s6-overlay/s6-rc.d/addon-migration/
 

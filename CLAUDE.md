@@ -99,6 +99,7 @@ Extends Coolify's database-only backups to support Docker volumes, configuration
 - **Encryption support**: All resource backup types support the same per-S3-storage encryption as database backups
 - **Independent scheduling**: Each resource can have its own backup schedule via cron expressions
 - **Retention policies**: Same local/S3 retention by amount, days, or storage as database backups
+- **Restore/Import**: Settings page with JSON backup viewer, env var bulk import into existing resources, step-by-step restoration guide
 - **Backup directory structure**: `/data/coolify/backups/resources/{team-slug}-{team-id}/{resource-name}-{uuid}/`
 
 ## Quick Reference
@@ -145,6 +146,8 @@ coolify-enhanced/
 │   │   │   │   └── configuration.blade.php    # DB config + Resource Backups sidebar
 │   │   │   ├── livewire/project/service/
 │   │   │   │   └── configuration.blade.php    # Service config + Resource Backups sidebar
+│   │   │   ├── components/settings/
+│   │   │   │   └── navbar.blade.php          # Settings navbar + Restore tab
 │   │   │   └── components/server/
 │   │   │       └── sidebar.blade.php          # Server sidebar + Resource Backups item
 │   │   └── Helpers/
@@ -161,13 +164,15 @@ coolify-enhanced/
 │       ├── AccessMatrix.php                   # Access matrix component
 │       ├── StorageEncryptionForm.php          # S3 path prefix + encryption settings
 │       ├── ResourceBackupManager.php          # Resource backup management UI
-│       └── ResourceBackupPage.php             # Server backup page component
+│       ├── ResourceBackupPage.php             # Server backup page component
+│       └── RestoreBackup.php                  # Settings restore/import page
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
 │   ├── storage-encryption-form.blade.php      # Path prefix + encryption form view
 │   ├── resource-backup-manager.blade.php      # Resource backup management view
-│   └── resource-backup-page.blade.php         # Full-page backup view
+│   ├── resource-backup-page.blade.php         # Full-page backup view
+│   └── restore-backup.blade.php              # Restore/import backup view
 ├── routes/                                     # API and web routes
 ├── config/                                     # Package configuration
 ├── docker/                                     # Docker build files
@@ -198,6 +203,8 @@ coolify-enhanced/
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
 | `src/Livewire/ResourceBackupPage.php` | Server resource backups page component |
+| `src/Livewire/RestoreBackup.php` | Settings restore/import page with env var bulk import |
+| `src/Overrides/Views/components/settings/navbar.blade.php` | Settings navbar with Restore tab |
 | `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix into team admin page |
 | `src/Models/ProjectUser.php` | Permission levels and helpers |
 | `config/coolify-enhanced.php` | Configuration options |
@@ -254,6 +261,7 @@ Owners and Admins bypass all permission checks. Only Members and Viewers need ex
 - New resource: `/project/{uuid}/{env_name}/new`
 - Application: `/project/{uuid}/{env_name}/application/{app_uuid}`
 - Resource Backups: `.../{resource_type}/{resource_uuid}/resource-backups`
+- Restore Backups: `/settings/restore-backup`
 
 ### UI Integration
 
@@ -265,6 +273,7 @@ Two approaches are used to add UI components to Coolify pages:
   - **Settings Backup** (`settings-backup.blade.php`) — instance file backup section below Coolify's native DB backup
   - **Resource Configuration** (`project/application/configuration.blade.php`, etc.) — adds "Resource Backups" sidebar item + `@elseif` content section that renders `enhanced::resource-backup-manager`
   - **Server Sidebar** (`components/server/sidebar.blade.php`) — adds "Resource Backups" sidebar item
+  - **Settings Navbar** (`components/settings/navbar.blade.php`) — adds "Restore" tab linking to restore/import page
 
 **Why view overlays for backups?** The configuration pages use `$currentRoute` to conditionally render content. Adding a sidebar item requires both the `<a>` link in the sidebar AND an `@elseif` branch in the content area. This can only be done in the Blade view — not via middleware or JavaScript. The backup manager component (`enhanced::resource-backup-manager`) needs proper Livewire hydration, which requires native rendering in the view.
 

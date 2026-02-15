@@ -104,6 +104,11 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
             'enhanced::resource-backup-page',
             \AmirhMoradi\CoolifyEnhanced\Livewire\ResourceBackupPage::class
         );
+
+        Livewire::component(
+            'enhanced::restore-backup',
+            \AmirhMoradi\CoolifyEnhanced\Livewire\RestoreBackup::class
+        );
     }
 
     /**
