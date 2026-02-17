@@ -25,6 +25,13 @@
                     href="{{ route('settings.restore-backup') }}">
                     Restore
                 </a>
+                {{-- Templates tab: only visible to admins/owners --}}
+                @if (in_array(auth()->user()?->teams?->first()?->pivot?->role, ['owner', 'admin']))
+                    <a class="{{ request()->routeIs('settings.custom-templates') ? 'dark:text-white' : '' }}" {{ wireNavigate() }}
+                        href="{{ route('settings.custom-templates') }}">
+                        Templates
+                    </a>
+                @endif
             @endif
             <div class="flex-1"></div>
         </nav>

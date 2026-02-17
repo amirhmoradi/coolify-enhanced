@@ -1,5 +1,6 @@
 <?php
 
+use AmirhMoradi\CoolifyEnhanced\Livewire\CustomTemplateSources;
 use AmirhMoradi\CoolifyEnhanced\Livewire\ResourceBackupPage;
 use AmirhMoradi\CoolifyEnhanced\Livewire\RestoreBackup;
 use Illuminate\Support\Facades\Route;
@@ -48,4 +49,8 @@ Route::middleware(['web', 'auth', 'verified'])->group(function () {
     // Settings: Restore/Import Backups page
     Route::get('settings/restore-backup', RestoreBackup::class)
         ->name('settings.restore-backup');
+
+    // Settings: Custom Template Sources page
+    Route::get('settings/custom-templates', CustomTemplateSources::class)
+        ->name('settings.custom-templates');
 });

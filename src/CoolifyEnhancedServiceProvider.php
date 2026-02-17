@@ -61,6 +61,9 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         // Register resource backup scheduler
         $this->registerResourceBackupScheduler();
 
+        // Register template source auto-sync scheduler
+        $this->registerTemplateSyncScheduler();
+
         // Defer policy registration to AFTER all service providers have booted.
         //
         // Laravel boots package providers BEFORE application providers.
@@ -108,6 +111,11 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         Livewire::component(
             'enhanced::restore-backup',
             \AmirhMoradi\CoolifyEnhanced\Livewire\RestoreBackup::class
+        );
+
+        Livewire::component(
+            'enhanced::custom-template-sources',
+            \AmirhMoradi\CoolifyEnhanced\Livewire\CustomTemplateSources::class
         );
     }
 
@@ -167,6 +175,32 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
                     }
                 }
             })->everyMinute()->name('coolify-enhanced:resource-backups')->withoutOverlapping();
+        });
+    }
+
+    /**
+     * Register the scheduler for auto-syncing custom template sources.
+     *
+     * Uses the configured cron expression (default: every 6 hours)
+     * to keep custom templates up to date.
+     */
+    protected function registerTemplateSyncScheduler(): void
+    {
+        $this->app->booted(function () {
+            $frequency = config('coolify-enhanced.custom_templates.sync_frequency');
+            if (! $frequency) {
+                return;
+            }
+
+            $schedule = $this->app->make(\Illuminate\Console\Scheduling\Schedule::class);
+
+            $schedule->call(function () {
+                $sources = \AmirhMoradi\CoolifyEnhanced\Models\CustomTemplateSource::where('enabled', true)->get();
+
+                foreach ($sources as $source) {
+                    \AmirhMoradi\CoolifyEnhanced\Jobs\SyncTemplateSourceJob::dispatch($source);
+                }
+            })->cron($frequency)->name('coolify-enhanced:template-sync')->withoutOverlapping();
         });
     }
 

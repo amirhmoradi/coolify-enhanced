@@ -18,6 +18,7 @@ This is a Laravel package that extends Coolify v4 with three main features:
 1. **Granular Permissions** — Project-level and environment-level access management with role-based overrides
 2. **Encrypted S3 Backups** — Transparent encryption at rest for all backups using rclone's crypt backend (NaCl SecretBox: XSalsa20 + Poly1305)
 3. **Resource Backups** — Volume, configuration, and full backups for Applications, Services, and Databases (beyond Coolify's database-only backup)
+4. **Custom Template Sources** — Add external GitHub repositories as sources for docker-compose service templates, extending Coolify's one-click service list
 
 It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image.
 
@@ -102,6 +103,20 @@ Extends Coolify's database-only backups to support Docker volumes, configuration
 - **Restore/Import**: Settings page with JSON backup viewer, env var bulk import into existing resources, step-by-step restoration guide
 - **Backup directory structure**: `/data/coolify/backups/resources/{team-slug}-{team-id}/{resource-name}-{uuid}/`
 
+### Custom Template Sources Architecture
+
+Extends Coolify's built-in service template system to support external GitHub repositories as additional template sources:
+
+- **Single integration point**: Overrides `get_service_templates()` in `bootstrap/helpers/shared.php` to merge custom templates alongside built-in ones
+- **GitHub API fetch**: Uses Contents API (falls back to Trees API for large dirs) to discover and download YAML template files
+- **Same format as Coolify**: Templates use identical YAML format with `# key: value` metadata headers — parsed using Coolify's own `Generate/Services.php` logic
+- **Cached to disk**: Fetched templates are cached as JSON at `/data/coolify/custom-templates/{source-uuid}/templates.json`
+- **Name collision handling**: Built-in templates take precedence; custom templates with same name get a `-{source-slug}` suffix
+- **Revert safe**: After deployment, services store `docker_compose_raw` in DB — removing a template source has zero impact on running services
+- **Auth support**: Optional GitHub PAT (encrypted in DB) for private repositories
+- **Auto-sync**: Configurable cron schedule (default: every 6 hours) for automatic template updates
+- **Settings UI**: "Templates" tab in Settings with source management, sync controls, and template preview
+
 ## Quick Reference
 
 ### Package Structure
@@ -112,12 +127,14 @@ coolify-enhanced/
 │   ├── CoolifyEnhancedServiceProvider.php     # Main service provider
 │   ├── Services/
 │   │   ├── PermissionService.php              # Core permission logic
-│   │   └── RcloneService.php                  # Rclone encryption commands
+│   │   ├── RcloneService.php                  # Rclone encryption commands
+│   │   └── TemplateSourceService.php          # GitHub template fetch & parse
 │   ├── Models/
 │   │   ├── ProjectUser.php                    # Project access pivot
 │   │   ├── EnvironmentUser.php                # Environment override pivot
 │   │   ├── ScheduledResourceBackup.php        # Resource backup schedule model
-│   │   └── ScheduledResourceBackupExecution.php # Resource backup execution model
+│   │   ├── ScheduledResourceBackupExecution.php # Resource backup execution model
+│   │   └── CustomTemplateSource.php           # Custom GitHub template source
 │   ├── Traits/
 │   │   └── HasS3Encryption.php                # S3 encryption helpers for model
 │   ├── Policies/                              # Laravel policies (override Coolify's)
@@ -151,11 +168,14 @@ coolify-enhanced/
 │   │   │   └── components/server/
 │   │   │       └── sidebar.blade.php          # Server sidebar + Resource Backups item
 │   │   └── Helpers/
-│   │       └── databases.php                  # Encryption-aware S3 delete
+│   │       ├── databases.php                  # Encryption-aware S3 delete
+│   │       └── shared.php                     # Custom templates in get_service_templates()
 │   ├── Jobs/
-│   │   └── ResourceBackupJob.php              # Volume/config/full backup job
+│   │   ├── ResourceBackupJob.php              # Volume/config/full backup job
+│   │   └── SyncTemplateSourceJob.php          # Background GitHub template sync
 │   ├── Http/
 │   │   ├── Controllers/Api/                   # API controllers
+│   │   │   ├── CustomTemplateSourceController.php # Template source management API
 │   │   │   ├── PermissionsController.php      # Permission management API
 │   │   │   └── ResourceBackupController.php   # Resource backup API
 │   │   └── Middleware/
@@ -165,14 +185,16 @@ coolify-enhanced/
 │       ├── StorageEncryptionForm.php          # S3 path prefix + encryption settings
 │       ├── ResourceBackupManager.php          # Resource backup management UI
 │       ├── ResourceBackupPage.php             # Server backup page component
-│       └── RestoreBackup.php                  # Settings restore/import page
+│       ├── RestoreBackup.php                  # Settings restore/import page
+│       └── CustomTemplateSources.php          # Custom template sources management
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
 │   ├── storage-encryption-form.blade.php      # Path prefix + encryption form view
 │   ├── resource-backup-manager.blade.php      # Resource backup management view
 │   ├── resource-backup-page.blade.php         # Full-page backup view
-│   └── restore-backup.blade.php              # Restore/import backup view
+│   ├── restore-backup.blade.php              # Restore/import backup view
+│   └── custom-template-sources.blade.php     # Template sources management view
 ├── routes/                                     # API and web routes
 ├── config/                                     # Package configuration
 ├── docker/                                     # Docker build files
@@ -204,7 +226,13 @@ coolify-enhanced/
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
 | `src/Livewire/ResourceBackupPage.php` | Server resource backups page component |
 | `src/Livewire/RestoreBackup.php` | Settings restore/import page with env var bulk import |
-| `src/Overrides/Views/components/settings/navbar.blade.php` | Settings navbar with Restore tab |
+| `src/Overrides/Views/components/settings/navbar.blade.php` | Settings navbar with Restore + Templates tabs |
+| `src/Overrides/Helpers/shared.php` | Override get_service_templates() to merge custom templates |
+| `src/Services/TemplateSourceService.php` | GitHub API fetch, YAML parsing, template caching |
+| `src/Models/CustomTemplateSource.php` | Custom template source model (repo URL, auth, cache) |
+| `src/Livewire/CustomTemplateSources.php` | Settings page for managing template sources |
+| `src/Jobs/SyncTemplateSourceJob.php` | Background job for syncing templates from GitHub |
+| `src/Http/Controllers/Api/CustomTemplateSourceController.php` | REST API for template sources |
 | `src/Http/Middleware/InjectPermissionsUI.php` | Injects access matrix into team admin page |
 | `src/Models/ProjectUser.php` | Permission levels and helpers |
 | `config/coolify-enhanced.php` | Configuration options |
@@ -306,6 +334,12 @@ Two approaches are used to add UI components to Coolify pages:
 21. **Resource backup route registration** — Web routes for resource backups point to Coolify's existing Configuration Livewire components (not our own). The overlay views detect the route name via `$currentRoute` and render the appropriate content. The server backup route uses our own `ResourceBackupPage` component since servers don't use the Configuration pattern.
 22. **Settings backup overlay** — The settings backup page overlay adds an "Instance File Backup" section below Coolify's native database backup. It uses the `global` mode of ResourceBackupManager which only shows `coolify_instance` backup schedules.
 23. **Configuration overlay maintenance** — Overlay views must be kept in sync with upstream Coolify changes. Each overlay is a full copy of the original with minimal additions (sidebar link + content branch). Mark enhanced additions with `{{-- Coolify Enhanced: ... --}}` comments for easy diffing.
+24. **shared.php overlay is the largest** — `bootstrap/helpers/shared.php` is 3500+ lines. The overlay modifies ONLY `get_service_templates()`. Mark changes with `[CUSTOM TEMPLATES OVERLAY]` comments. When syncing with upstream, diff carefully.
+25. **Custom templates are write-once** — After a service is deployed from a custom template, the compose YAML lives in the DB (`Service.docker_compose_raw`). No runtime operations re-read the template. Removing a source has zero impact on deployed services.
+26. **Template name collisions** — Built-in templates always take precedence. Custom templates with matching names get a `-{source-slug}` suffix. Custom-to-custom collisions also get the source slug suffix.
+27. **GitHub API rate limits** — Unauthenticated: 60 requests/hour. Authenticated: 5000/hour. The sync service uses retry logic but large sources with many files can hit limits without a token.
+28. **Template cache directory** — Custom templates are cached at `/data/coolify/custom-templates/{source-uuid}/templates.json`. This directory must be writable by the www-data user.
+29. **validateDockerComposeForInjection()** — Custom templates are validated using Coolify's injection validator during sync. Templates that fail validation are skipped (not fatal to the sync).
 
 ## Important Notes
 
@@ -317,6 +351,7 @@ Two approaches are used to add UI components to Coolify pages:
 6. **Encryption is per-storage** - Each S3 storage destination can independently enable encryption
 7. **S3 path prefix** - Configurable per-storage path prefix for multi-instance bucket sharing
 8. **Resource backups** - Volume, configuration, and full backups via `enhanced::resource-backup-manager` component
+9. **Custom templates** - External GitHub repos as template sources, managed via Settings > Templates page
 
 ## See Also
 

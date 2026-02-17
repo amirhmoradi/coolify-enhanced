@@ -70,9 +70,13 @@ COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/service/conf
 COPY --chown=www-data:www-data src/Overrides/Views/components/server/sidebar.blade.php \
     /var/www/html/resources/views/components/server/sidebar.blade.php
 
-# Override settings navbar to add Restore tab
+# Override settings navbar to add Restore + Templates tabs
 COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.blade.php \
     /var/www/html/resources/views/components/settings/navbar.blade.php
+
+# Override shared helper to merge custom template sources into service templates
+COPY --chown=www-data:www-data src/Overrides/Helpers/shared.php \
+    /var/www/html/bootstrap/helpers/shared.php
 
 # Copy the s6-overlay script for addon migrations
 COPY --chmod=755 docker/s6-overlay/s6-rc.d/addon-migration/ /etc/s6-overlay/s6-rc.d/addon-migration/

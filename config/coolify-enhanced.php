@@ -99,4 +99,28 @@ return [
         // The rclone Docker image used for encrypted backup operations
         'rclone_image' => env('COOLIFY_RCLONE_IMAGE', 'rclone/rclone:latest'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Template Sources
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for custom GitHub template sources.
+    | Allows adding external repositories with docker-compose templates
+    | that appear in the one-click service list.
+    |
+    */
+    'custom_templates' => [
+        // Auto-sync interval (cron expression). Set to null to disable auto-sync.
+        'sync_frequency' => env('COOLIFY_TEMPLATE_SYNC_FREQUENCY', '0 */6 * * *'),
+
+        // Cache directory for fetched templates
+        'cache_dir' => env('COOLIFY_TEMPLATE_CACHE_DIR', '/data/coolify/custom-templates'),
+
+        // Maximum templates per source (safety limit)
+        'max_templates_per_source' => 500,
+
+        // GitHub API timeout in seconds
+        'github_timeout' => 30,
+    ],
 ];

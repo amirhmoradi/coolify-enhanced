@@ -1,5 +1,6 @@
 <?php
 
+use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\CustomTemplateSourceController;
 use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\PermissionsController;
 use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\ResourceBackupController;
 use Illuminate\Support\Facades\Route;
@@ -41,5 +42,27 @@ Route::middleware(['auth:sanctum', 'api.sensitive'])->prefix('v1')->group(functi
         ->middleware('api.ability:write');
 
     Route::delete('/resource-backups/{uuid}', [ResourceBackupController::class, 'destroy'])
+        ->middleware('api.ability:write');
+
+    // Custom template source management
+    Route::get('/template-sources', [CustomTemplateSourceController::class, 'index'])
+        ->middleware('api.ability:read');
+
+    Route::post('/template-sources', [CustomTemplateSourceController::class, 'store'])
+        ->middleware('api.ability:write');
+
+    Route::get('/template-sources/{uuid}', [CustomTemplateSourceController::class, 'show'])
+        ->middleware('api.ability:read');
+
+    Route::patch('/template-sources/{uuid}', [CustomTemplateSourceController::class, 'update'])
+        ->middleware('api.ability:write');
+
+    Route::delete('/template-sources/{uuid}', [CustomTemplateSourceController::class, 'destroy'])
+        ->middleware('api.ability:write');
+
+    Route::post('/template-sources/{uuid}/sync', [CustomTemplateSourceController::class, 'sync'])
+        ->middleware('api.ability:write');
+
+    Route::post('/template-sources/sync-all', [CustomTemplateSourceController::class, 'syncAll'])
         ->middleware('api.ability:write');
 });
