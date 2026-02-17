@@ -46,7 +46,7 @@ class CustomTemplateSource extends Model
      */
     public function getCacheDirectory(): string
     {
-        $baseDir = config('coolify-enhanced.custom_templates.cache_dir', '/data/coolify/custom-templates');
+        $baseDir = config('coolify-enhanced.custom_templates.cache_dir', storage_path('app/custom-templates'));
 
         return $baseDir.'/'.$this->uuid;
     }

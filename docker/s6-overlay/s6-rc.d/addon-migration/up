@@ -10,7 +10,3 @@ foreground {
     --path=vendor/amirhmoradi/coolify-enhanced/database/migrations
     --force
 }
-
-# Create custom templates cache directory (www-data needs write access)
-foreground { mkdir -p /data/coolify/custom-templates }
-foreground { chown www-data:www-data /data/coolify/custom-templates }
