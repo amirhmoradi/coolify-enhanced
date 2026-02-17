@@ -12,3 +12,6 @@ services:
     environment:
       # Enable Coolify Enhanced (granular permissions + encrypted backups)
       - COOLIFY_ENHANCED=true
+    volumes:
+      # Persist custom template cache (same pattern as Coolify's other data mounts)
+      - /data/coolify/custom-templates:/var/www/html/storage/app/custom-templates

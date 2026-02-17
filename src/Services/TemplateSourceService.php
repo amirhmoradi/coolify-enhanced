@@ -396,7 +396,7 @@ class TemplateSourceService
      */
     protected static function saveCachedTemplates(CustomTemplateSource $source, array $templates): void
     {
-        $baseDir = config('coolify-enhanced.custom_templates.cache_dir', '/data/coolify/custom-templates');
+        $baseDir = config('coolify-enhanced.custom_templates.cache_dir', storage_path('app/custom-templates'));
         if (! File::isDirectory($baseDir)) {
             File::makeDirectory($baseDir, 0755, true);
         }

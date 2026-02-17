@@ -115,7 +115,9 @@ return [
         'sync_frequency' => env('COOLIFY_TEMPLATE_SYNC_FREQUENCY', '0 */6 * * *'),
 
         // Cache directory for fetched templates
-        'cache_dir' => env('COOLIFY_TEMPLATE_CACHE_DIR', '/data/coolify/custom-templates'),
+        // Follows Coolify's pattern: host /data/coolify/custom-templates is mounted
+        // to container /var/www/html/storage/app/custom-templates via docker-compose.custom.yml
+        'cache_dir' => env('COOLIFY_TEMPLATE_CACHE_DIR', storage_path('app/custom-templates')),
 
         // Maximum templates per source (safety limit)
         'max_templates_per_source' => 500,
