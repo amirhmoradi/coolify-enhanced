@@ -69,7 +69,7 @@ class CustomTemplateSources extends Component
      */
     public function showAddForm(): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
         $this->resetForm();
         $this->editingSourceId = null;
         $this->showForm = true;
@@ -80,7 +80,7 @@ class CustomTemplateSources extends Component
      */
     public function editSource(int $sourceId): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
         $source = CustomTemplateSource::findOrFail($sourceId);
         $this->editingSourceId = $source->id;
         $this->formName = $source->name;
@@ -106,7 +106,7 @@ class CustomTemplateSources extends Component
      */
     public function saveSource(): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
         $this->validate();
 
         try {
@@ -158,7 +158,7 @@ class CustomTemplateSources extends Component
      */
     public function syncSource(int $sourceId): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
 
         try {
             $source = CustomTemplateSource::findOrFail($sourceId);
@@ -174,7 +174,7 @@ class CustomTemplateSources extends Component
      */
     public function syncAll(): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
 
         try {
             $sources = CustomTemplateSource::where('enabled', true)->get();
@@ -192,7 +192,7 @@ class CustomTemplateSources extends Component
      */
     public function toggleEnabled(int $sourceId): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
 
         try {
             $source = CustomTemplateSource::findOrFail($sourceId);
@@ -211,7 +211,7 @@ class CustomTemplateSources extends Component
      */
     public function deleteSource(int $sourceId): void
     {
-        $this->authorize();
+        $this->ensureAuthorized();
 
         try {
             $source = CustomTemplateSource::findOrFail($sourceId);
@@ -255,8 +255,9 @@ class CustomTemplateSources extends Component
 
     /**
      * Check authorization and abort if not allowed.
+     * Named ensureAuthorized() to avoid conflict with Livewire\Component::authorize().
      */
-    protected function authorize(): void
+    protected function ensureAuthorized(): void
     {
         if (! $this->isAuthorized()) {
             abort(403);
