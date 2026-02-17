@@ -564,6 +564,79 @@ function get_service_templates(bool $force = false): Collection
             // Log but never break the template loading — built-in templates must always work
             \Illuminate\Support\Facades\Log::warning('Coolify Enhanced: Failed to load custom templates: '.$e->getMessage());
         }
+
+        // [IGNORED TEMPLATES OVERLAY] Load built-in templates with "# ignore: true" from YAML files on disk
+        try {
+            $ignored = collect(array_merge(
+                glob(base_path('templates/compose/*.yaml')),
+                glob(base_path('templates/compose/*.yml'))
+            ))->mapWithKeys(function ($filePath) use ($builtIn) {
+                $file = basename($filePath);
+                $content = file_get_contents($filePath);
+
+                // Extract metadata headers
+                $data = collect(explode("\n", $content))->mapWithKeys(function ($line): array {
+                    preg_match('/^#(?<key>.*):(?<value>.*)$/U', $line, $m);
+                    return $m ? [trim($m['key']) => trim($m['value'])] : [];
+                });
+
+                // Only include templates that ARE ignored
+                if (! str($data->get('ignore'))->toBoolean()) {
+                    return [];
+                }
+
+                $templateName = pathinfo($file, PATHINFO_FILENAME);
+
+                // Skip if somehow already in the collection (shouldn't happen, but be safe)
+                if ($builtIn->has($templateName)) {
+                    return [];
+                }
+
+                $json = \Symfony\Component\Yaml\Yaml::parse($content);
+                if (! is_array($json) || ! isset($json['services'])) {
+                    return [];
+                }
+
+                $compose = base64_encode(\Symfony\Component\Yaml\Yaml::dump($json, 10, 2));
+
+                $documentation = $data->get('documentation');
+                $documentation = $documentation ? $documentation.'?utm_source=coolify.io' : 'https://coolify.io/docs';
+
+                $tags = str($data->get('tags', ''))->lower()->explode(',')->map(fn ($tag) => trim($tag))->filter();
+                $tags = $tags->isEmpty() ? null : $tags->all();
+
+                $payload = [
+                    'documentation' => $documentation,
+                    'slogan' => $data->get('slogan', str($file)->headline()),
+                    'compose' => $compose,
+                    'tags' => $tags,
+                    'category' => $data->get('category'),
+                    'logo' => $data->get('logo', 'svgs/default.webp'),
+                    'minversion' => $data->get('minversion', '0.0.0'),
+                    '_ignored' => true,
+                ];
+
+                if ($port = $data->get('port')) {
+                    $payload['port'] = $port;
+                }
+
+                if ($envFile = $data->get('env_file')) {
+                    $envFilePath = base_path("templates/compose/{$envFile}");
+                    if (file_exists($envFilePath)) {
+                        $payload['envs'] = base64_encode(file_get_contents($envFilePath));
+                    }
+                }
+
+                return [$templateName => $payload];
+            })->filter();
+
+            if ($ignored->isNotEmpty()) {
+                $builtIn = $builtIn->merge($ignored);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Coolify Enhanced: Failed to load ignored templates: '.$e->getMessage());
+        }
+        // [END IGNORED TEMPLATES OVERLAY]
     }
     // [END CUSTOM TEMPLATES OVERLAY]
 

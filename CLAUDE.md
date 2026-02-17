@@ -232,8 +232,8 @@ coolify-enhanced/
 | `src/Livewire/ResourceBackupPage.php` | Server resource backups page component |
 | `src/Livewire/RestoreBackup.php` | Settings restore/import page with env var bulk import |
 | `src/Overrides/Views/components/settings/navbar.blade.php` | Settings navbar with Restore + Templates tabs |
-| `src/Overrides/Views/livewire/project/new/select.blade.php` | New Resource page with custom template source labels |
-| `src/Overrides/Helpers/shared.php` | Override get_service_templates() to merge custom templates |
+| `src/Overrides/Views/livewire/project/new/select.blade.php` | New Resource page with source labels, source filter, untested badges |
+| `src/Overrides/Helpers/shared.php` | Override get_service_templates() to merge custom + ignored templates |
 | `src/Services/TemplateSourceService.php` | GitHub API fetch, YAML parsing, template caching |
 | `src/Models/CustomTemplateSource.php` | Custom template source model (repo URL, auth, cache) |
 | `src/Livewire/CustomTemplateSources.php` | Settings page for managing template sources |
@@ -349,6 +349,9 @@ Two approaches are used to add UI components to Coolify pages:
 29. **validateDockerComposeForInjection()** — Custom templates are validated using Coolify's injection validator during sync. Templates that fail validation are skipped (not fatal to the sync).
 30. **Custom template `_source` field** — `parseTemplateContent()` adds `_source` (source name) and `_source_uuid` (source UUID) to every custom template. These fields pass through `loadServices()` to the frontend via `+ (array) $service`, enabling the select.blade.php overlay to show source labels on custom template cards.
 31. **Select.blade.php overlay** — The New Resource page overlay adds a source label badge (top-right corner) on service cards from custom template sources. The doc icon position shifts down when a label is present via the `'top-6': service._source` Alpine.js class binding.
+32. **Ignored/untested templates (`_ignored` flag)** — Coolify's `generate:services` command skips templates with `# ignore: true`, so they never appear in the JSON. The shared.php overlay loads these directly from YAML files on disk (`templates/compose/*.yaml`) and includes them with `_ignored: true`. Custom templates from `TemplateSourceService` also preserve `_ignored` instead of skipping. The select.blade.php overlay shows an amber "Untested" badge and requires user confirmation via `confirm()` before proceeding.
+33. **Doc icon stacking with badges** — When a service card has both `_source` and `_ignored` badges, the doc icon shifts down further (`top: 2.25rem`). With only one badge, it shifts to `top: 1.25rem`. The `_ignored` badge itself shifts down (`top: 1.05rem`) when a `_source` label is also present.
+34. **Source filter dropdown** — The New Resource page has a "Filter by source" dropdown next to the category filter. Uses `selectedSource` state: empty string = all, `__official__` = built-in only, or a specific source name. The dropdown only appears when `sources.length > 0`. Sources are extracted from `_source` fields after `loadServices()`.
 
 ## Important Notes
 

@@ -289,10 +289,8 @@ class TemplateSourceService
             return $m ? [trim($m['key']) => trim($m['value'])] : [];
         });
 
-        // Skip ignored templates
-        if (str($data->get('ignore'))->toBoolean()) {
-            return null;
-        }
+        // Track ignored status instead of skipping
+        $isIgnored = str($data->get('ignore'))->toBoolean();
 
         // Parse and validate YAML
         $yaml = Yaml::parse($content);
@@ -347,6 +345,11 @@ class TemplateSourceService
             '_source' => $source->name,
             '_source_uuid' => $source->uuid,
         ];
+
+        // Mark ignored templates for UI warning instead of skipping them
+        if ($isIgnored) {
+            $payload['_ignored'] = true;
+        }
 
         if ($port = $data->get('port')) {
             $payload['port'] = $port;

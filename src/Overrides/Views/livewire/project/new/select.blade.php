@@ -187,7 +187,7 @@
 
                     <div class="grid justify-start grid-cols-1 gap-4 text-left xl:grid-cols-3">
                         <template x-for="service in filteredServices" :key="service.name">
-                            <div class="relative" x-on:click="setType('one-click-service-' + service.name)"
+                            <div class="relative" x-on:click="setType('one-click-service-' + service.name, service._ignored)"
                                 :class="{ 'cursor-pointer': !selecting, 'cursor-not-allowed opacity-50': selecting }">
                                 <x-resource-view>
                                     <x-slot:title>
@@ -218,13 +218,20 @@
                                         x-text="service._source"
                                         :title="service._source"></span>
                                 </template>
+                                {{-- Coolify Enhanced: Untested/ignored template warning badge --}}
+                                <template x-if="service._ignored">
+                                    <span class="absolute px-1.5 py-0.5 font-medium rounded border truncate"
+                                        style="right: 0; max-width: 8rem; font-size: 10px; line-height: 1.2; pointer-events: none; color: #d97706; background: rgba(251,191,36,0.12); border-color: #d97706;"
+                                        :style="service._source ? 'top: 1.05rem' : 'top: 0'"
+                                        title="This template has not been reviewed or tested and may cause issues">Untested</span>
+                                </template>
                                 {{-- End Coolify Enhanced --}}
                                 <template x-if="shouldShowDocIcon(service)">
                                     <a :href="getDocLink(service) || coolifyDocsUrl(service.name)" target="_blank"
                                         @click.stop @mouseenter="resolveDocLink(service)"
                                         class="absolute top-2 right-2 p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-coolgray-300 transition-colors"
                                         :class="{ 'opacity-50': docCheckInProgress[service.name] }"
-                                        :style="service._source ? 'top: 1.25rem' : ''"
+                                        :style="(service._source && service._ignored) ? 'top: 2.25rem' : ((service._source || service._ignored) ? 'top: 1.25rem' : '')"
                                         title="View documentation">
                                         <svg class="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none"
                                             stroke="currentColor" viewBox="0 0 24 24">
@@ -263,8 +270,14 @@
                         databases: [],
                         docLinkCache: {}, // Cache resolved doc URLs: { serviceName: url | null }
                         docCheckInProgress: {}, // Track ongoing checks: { serviceName: boolean }
-                        setType(type) {
+                        setType(type, ignored = false) {
                             if (this.selecting) return;
+                            // Coolify Enhanced: confirmation for untested/ignored templates
+                            if (ignored) {
+                                if (!confirm('This template has not been reviewed or tested by the Coolify team and may cause issues. Are you sure you want to proceed?')) {
+                                    return;
+                                }
+                            }
                             this.selecting = true;
                             this.$wire.setType(type);
                         },
