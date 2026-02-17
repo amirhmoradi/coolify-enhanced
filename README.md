@@ -90,56 +90,66 @@ All four features are **independent** — enable only what you need. When disabl
 ### Access Matrix — Team Permission Management
 
 <!-- SCREENSHOT: Access Matrix on the Team > Admin page showing the user/project/environment permission grid with dropdowns -->
-![Access Matrix](<!-- INSERT_SCREENSHOT_URL: access-matrix.png -->)
+![Access Matrix](<img width="2372" height="1956" alt="coolify-granular-user-permissions" src="https://github.com/user-attachments/assets/ab96988f-5f77-4dbe-8371-d9f093f8ccf7" />
+)
 
 *The Access Matrix provides a unified view of all users, projects, and environments with per-cell permission controls.*
 
 ### S3 Storage — Encryption Settings
 
 <!-- SCREENSHOT: S3 Storage detail page showing the encryption toggle, password fields, filename encryption dropdown -->
-![Encryption Settings](<!-- INSERT_SCREENSHOT_URL: encryption-settings.png -->)
+![Encryption Settings](<img width="2360" height="1938" alt="coolify-s3-pathprefix-encryption" src="https://github.com/user-attachments/assets/8a6f2713-83d6-4153-a32b-0f1f928ba613" />
+)
 
 *Enable per-storage encryption with a single toggle. Configure encryption password, salt, and filename encryption mode.*
 
 ### Resource Backups — Application Configuration Page
 
 <!-- SCREENSHOT: Application configuration page with Resource Backups sidebar item selected, showing backup schedules and executions -->
-![Resource Backups](<!-- INSERT_SCREENSHOT_URL: resource-backups.png -->)
+![Resource Backups](<img width="2364" height="1584" alt="coolify-resource-app-full-new-backup" src="https://github.com/user-attachments/assets/846964fa-ea29-4442-8579-f0f2409c544f" />
+)
+![Backup Executions](<img width="2362" height="1386" alt="coolify-resource-app-full-executions-backup" src="https://github.com/user-attachments/assets/5672339f-6886-452d-9310-de52d4284e2a" />)
+
 
 *Schedule volume, configuration, or full backups for any application, database, or service with independent cron expressions.*
 
 ### Resource Backups — Server Overview
 
 <!-- SCREENSHOT: Server sidebar with Resource Backups item, showing all resource backups for the server -->
-![Server Resource Backups](<!-- INSERT_SCREENSHOT_URL: server-resource-backups.png -->)
+![Server Resource Backups](<img width="2366" height="1960" alt="coolify-instance-file-backups" src="https://github.com/user-attachments/assets/977c6e2c-4802-4aaf-8a85-5b944a9dbfc8" />
+)
 
 *View and manage all resource backups across a server from a single page.*
 
 ### Settings — Restore & Import
 
 <!-- SCREENSHOT: Settings > Restore page showing the JSON backup viewer and env var bulk import -->
-![Restore Backup](<!-- INSERT_SCREENSHOT_URL: restore-backup.png -->)
+![Restore Backup](<img width="2362" height="1852" alt="import-server-backups" src="https://github.com/user-attachments/assets/8aa300f0-2703-4975-9fbe-1e33a15c3de1" />
+)
 
 *Browse configuration backup contents, bulk-import environment variables, and follow step-by-step restoration guides.*
 
 ### Custom Template Sources — Settings Page
 
 <!-- SCREENSHOT: Settings > Templates page showing added sources with sync status, template count, and template previews -->
-![Custom Template Sources](<!-- INSERT_SCREENSHOT_URL: custom-template-sources.png -->)
+![Custom Template Sources](<img width="2368" height="1076" alt="custom-template-sources-settings" src="https://github.com/user-attachments/assets/7a1e67c6-7b7e-471f-b413-54b387c2c2a5" />
+)
 
 *Add GitHub repositories as template sources, view sync status, preview discovered templates, and trigger manual syncs.*
 
 ### New Resource Page — Source Filter & Labels
 
 <!-- SCREENSHOT: New Resource page showing service cards with custom template source labels and the source filter dropdown -->
-![New Resource with Custom Templates](<!-- INSERT_SCREENSHOT_URL: new-resource-source-filter.png -->)
+![New Resource with Custom Templates](<img width="2364" height="1030" alt="New-Resources-From-Custom-templates-sources" src="https://github.com/user-attachments/assets/41fbeb33-832c-4aec-a3de-646ba738b2c7" />
+)
 
 *Custom templates appear alongside built-in services with source labels. Use the source filter dropdown to narrow by origin.*
 
 ### Instance File Backup — Settings Page
 
 <!-- SCREENSHOT: Settings > Backup page showing the Instance File Backup section below the native database backup -->
-![Instance File Backup](<!-- INSERT_SCREENSHOT_URL: instance-file-backup.png -->)
+![Instance File Backup]()
+![Uploading coolify-instance-file-backups.png…]()
 
 *Schedule full `/data/coolify` directory backups (excluding backup directories) from the Settings page.*
 
