@@ -175,7 +175,8 @@
                                 </x-resource-view>
                                 {{-- Coolify Enhanced: Custom template source label --}}
                                 <template x-if="service._source">
-                                    <span class="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] font-medium leading-tight rounded bg-coolgray-200 dark:bg-coolgray-300 text-neutral-500 dark:text-neutral-400 border border-neutral-300 dark:border-coolgray-400 max-w-[8rem] truncate pointer-events-none"
+                                    <span style="top: 0; right: 0; max-width: 8rem; font-size: 10px; line-height: 1.2; pointer-events: none;"
+                                        class="absolute px-1.5 py-0.5 font-medium rounded bg-coolgray-200 dark:bg-coolgray-300 text-neutral-500 dark:text-neutral-400 border border-neutral-300 dark:border-coolgray-400 truncate"
                                         x-text="service._source"
                                         :title="service._source"></span>
                                 </template>
@@ -184,7 +185,8 @@
                                     <a :href="getDocLink(service) || coolifyDocsUrl(service.name)" target="_blank"
                                         @click.stop @mouseenter="resolveDocLink(service)"
                                         class="absolute top-2 right-2 p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-coolgray-300 transition-colors"
-                                        :class="{ 'opacity-50': docCheckInProgress[service.name], 'top-6': service._source }"
+                                        :class="{ 'opacity-50': docCheckInProgress[service.name] }"
+                                        :style="service._source ? 'top: 1.25rem' : ''"
                                         title="View documentation">
                                         <svg class="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none"
                                             stroke="currentColor" viewBox="0 0 24 24">
