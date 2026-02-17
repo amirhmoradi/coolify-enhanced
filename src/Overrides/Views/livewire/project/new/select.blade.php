@@ -221,8 +221,8 @@
                                 {{-- Coolify Enhanced: Untested/ignored template warning badge --}}
                                 <template x-if="service._ignored">
                                     <span class="absolute px-1.5 py-0.5 font-medium rounded border truncate"
-                                        style="right: 0; max-width: 8rem; font-size: 10px; line-height: 1.2; pointer-events: none; color: #d97706; background: rgba(251,191,36,0.12); border-color: #d97706;"
-                                        :style="service._source ? 'top: 1.05rem' : 'top: 0'"
+                                        style="right: 0; max-width: 8rem; font-size: 8px; line-height: 1.2; pointer-events: none; color: #d97706; background: rgba(251,191,36,0.12); border-color: #d97706;"
+                                        :style="service._source ? 'top: 1.05rem;right:0' : 'top: 0;right:0'"
                                         title="This template has not been reviewed or tested and may cause issues">Untested</span>
                                 </template>
                                 {{-- End Coolify Enhanced --}}
