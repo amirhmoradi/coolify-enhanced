@@ -36,9 +36,17 @@ RUN composer config repositories.coolify-enhanced path /tmp/coolify-enhanced && 
 # on an S3 destination, they fall back to the original behavior.
 # =================================================================
 
-# Override DatabaseBackupJob with encryption-aware version
+# Override DatabaseBackupJob with encryption-aware + classification-aware version
 COPY --chown=www-data:www-data src/Overrides/Jobs/DatabaseBackupJob.php \
     /var/www/html/app/Jobs/DatabaseBackupJob.php
+
+# Override StartDatabaseProxy with expanded database port mapping
+COPY --chown=www-data:www-data src/Overrides/Actions/Database/StartDatabaseProxy.php \
+    /var/www/html/app/Actions/Database/StartDatabaseProxy.php
+
+# Override ServiceDatabase model with wire-compatible database type mappings
+COPY --chown=www-data:www-data src/Overrides/Models/ServiceDatabase.php \
+    /var/www/html/app/Models/ServiceDatabase.php
 
 # Override Import Livewire component with encryption-aware version
 COPY --chown=www-data:www-data src/Overrides/Livewire/Project/Database/Import.php \

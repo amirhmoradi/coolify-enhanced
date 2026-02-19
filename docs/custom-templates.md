@@ -14,6 +14,7 @@ This guide covers how to create, host, and use custom service templates with Coo
   - [Volumes and Storage](#volumes-and-storage)
   - [Health Checks](#health-checks)
   - [Logos](#logos)
+- [Database Classification](#database-classification)
 - [Repository Structure](#repository-structure)
 - [Adding a Template Source](#adding-a-template-source)
 - [API Management](#api-management)
@@ -71,6 +72,7 @@ Add these comment lines at the **top** of your YAML file, before any YAML conten
 | `logo` | No | Path to the service logo. Can be a relative path (resolved from the template folder) or an absolute URL (`https://...`). SVG format is strongly preferred. Defaults to `svgs/default.webp`. |
 | `port` | No | The primary port the service listens on. Used for generating `SERVICE_URL_*` variables. |
 | `env_file` | No | Path to an `.env` file (relative to the template folder) containing default environment variables. |
+| `type` | No | `database` or `application`. Overrides automatic classification for all services in the template. See [Database Classification](#database-classification). |
 | `ignore` | No | Set to `true` to exclude this file from the template list. Useful for work-in-progress templates. |
 | `minversion` | No | Minimum Coolify version required (e.g., `4.0.0-beta.300`). Defaults to `0.0.0`. |
 
@@ -245,6 +247,74 @@ my-templates/
 └── logos/
     └── myservice.svg
 ```
+
+## Database Classification
+
+Coolify classifies each service in a docker-compose template as either a **database** or an **application**. Databases get features like "Make Publicly Available" (TCP proxy), scheduled backups, and database import. Coolify Enhanced expands the automatic recognition to 50+ additional database images, but for custom or uncommon databases, you may need to explicitly classify services.
+
+### Template-Level: `# type: database`
+
+Add the `# type:` metadata header to classify **all services** in the template:
+
+```yaml
+# documentation: https://memgraph.com/docs
+# slogan: Real-time graph database
+# tags: graph,database,cypher
+# type: database
+
+services:
+  memgraph:
+    image: memgraph/memgraph:latest
+    volumes:
+      - memgraph-data:/var/lib/memgraph
+```
+
+Valid values: `database` or `application`. This injects `coolify.database` labels into all services during parsing.
+
+### Per-Service: `coolify.database` Label
+
+For multi-service templates with mixed types (e.g., a database + admin UI), use the Docker label on individual services:
+
+```yaml
+# type: database
+
+services:
+  memgraph:
+    image: memgraph/memgraph:latest
+    # Gets coolify.database=true from # type: database header
+
+  memgraph-lab:
+    image: memgraph/lab:latest
+    labels:
+      coolify.database: "false"  # Override: web UI, not a database
+```
+
+Per-service labels always take precedence over the template-level `# type:` header.
+
+### When Do You Need This?
+
+You **don't** need to specify `# type:` if your database image is already in Coolify Enhanced's expanded recognition list (50+ images including Memgraph, Milvus, Qdrant, Neo4j, Cassandra, etc.). The classification is automatic.
+
+You **should** specify `# type: database` when:
+- Using a custom or private database image that isn't in the recognition list
+- Using a non-standard image tag that doesn't contain the database name
+- You want to ensure correct classification regardless of future list changes
+
+### Label Format
+
+The `coolify.database` label accepts both Docker Compose label formats:
+
+```yaml
+# Map format
+labels:
+  coolify.database: "true"
+
+# Array format
+labels:
+  - coolify.database=true
+```
+
+Boolean parsing is flexible: accepts `true/false`, `1/0`, `yes/no`, `on/off` (case-insensitive).
 
 ## Repository Structure
 

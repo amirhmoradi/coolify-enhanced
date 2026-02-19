@@ -4,14 +4,20 @@
 // OVERLAY: Modified version of Coolify's DatabaseBackupJob
 // =============================================================================
 // This file replaces app/Jobs/DatabaseBackupJob.php in the Coolify container.
-// Changes from the original are marked with [ENCRYPTION OVERLAY] or
-// [PATH PREFIX OVERLAY] comments.
+// Changes from the original are marked with overlay comments:
+//
+// [ENCRYPTION OVERLAY] — rclone-based encrypted S3 uploads
+// [PATH PREFIX OVERLAY] — S3 path prefix support (PR #7776)
+// [DATABASE CLASSIFICATION OVERLAY] — Meaningful error messages for unsupported
+//   database types instead of silent skips or generic exceptions
 //
 // Modifications:
 //   1. Added import for RcloneService
 //   2. Modified upload_to_s3() to use rclone when encryption is enabled
 //   3. Added is_encrypted tracking on backup execution records
 //   4. Added S3 path prefix support (PR #7776)
+//   5. Replaced silent return/generic exception for unsupported DB types with
+//      helpful error messages suggesting custom_type or Resource Backups
 // =============================================================================
 
 namespace App\Jobs;
@@ -270,7 +276,13 @@ class DatabaseBackupJob implements ShouldBeEncrypted, ShouldQueue
                 } elseif (str($databaseType)->contains('mariadb')) {
                     $databasesToBackup = [$this->database->mariadb_database];
                 } else {
-                    return;
+                    // [DATABASE CLASSIFICATION OVERLAY] — Meaningful error instead of silent skip
+                    throw new \Exception(
+                        "Unsupported database type for dump-based backup: {$databaseType}. ".
+                        'Set custom_type on the service database to a supported type (postgresql, mysql, mariadb, mongodb) '.
+                        'if this database is compatible, or use Resource Backups for volume-level backups.'
+                    );
+                    // [END DATABASE CLASSIFICATION OVERLAY]
                 }
             } else {
                 if (str($databaseType)->contains('postgres')) {
@@ -288,7 +300,13 @@ class DatabaseBackupJob implements ShouldBeEncrypted, ShouldQueue
                     $databasesToBackup = explode(',', $databasesToBackup);
                     $databasesToBackup = array_map('trim', $databasesToBackup);
                 } else {
-                    return;
+                    // [DATABASE CLASSIFICATION OVERLAY] — Meaningful error instead of silent skip
+                    throw new \Exception(
+                        "Unsupported database type for dump-based backup: {$databaseType}. ".
+                        'Set custom_type on the service database to a supported type (postgresql, mysql, mariadb, mongodb) '.
+                        'if this database is compatible, or use Resource Backups for volume-level backups.'
+                    );
+                    // [END DATABASE CLASSIFICATION OVERLAY]
                 }
             }
             $this->backup_dir = backup_dir().'/databases/'.str($this->team->name)->slug().'-'.$this->team->id.'/'.$this->directory_name;
@@ -379,7 +397,13 @@ class DatabaseBackupJob implements ShouldBeEncrypted, ShouldQueue
                         ]);
                         $this->backup_standalone_mariadb($database);
                     } else {
-                        throw new \Exception('Unsupported database type');
+                        // [DATABASE CLASSIFICATION OVERLAY] — Better error for unsupported types
+                        throw new \Exception(
+                            "Unsupported database type for dump-based backup: {$databaseType}. ".
+                            'Set custom_type on the service database to a supported type (postgresql, mysql, mariadb, mongodb) '.
+                            'if this database is compatible, or use Resource Backups for volume-level backups.'
+                        );
+                        // [END DATABASE CLASSIFICATION OVERLAY]
                     }
 
                     $size = $this->calculate_size();

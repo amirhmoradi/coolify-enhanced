@@ -7,9 +7,10 @@ This file provides guidance to **Claude Code** and other AI assistants when work
 ## Mandatory Rules for AI Agents
 
 1. **Keep documentation updated** - After every significant code change, update CLAUDE.md and AGENTS.md with new learnings, patterns, and pitfalls discovered during implementation.
-2. **Pull Coolify source on each prompt** - At the start of each session, run `git -C docs/coolify-source pull` to ensure the Coolify reference source is up to date. If the directory doesn't exist, clone it: `git clone --depth 1 https://github.com/coollabsio/coolify.git docs/coolify-source`.
-3. **Browse Coolify source for context** - When working on policies, authorization, or UI integration, always reference the Coolify source under `docs/coolify-source/` to understand how Coolify implements things natively.
-4. **Read before writing** - Always read existing files before modifying them. Understand the current state before making changes.
+2. **Update all documentation on every feature/modification** - Every new feature, modification, or bug fix **must** include updates to: (a) **README.md** — user-facing documentation so users know how to use and configure the feature, (b) **AGENTS.md** — technical details for AI agents including architecture, overlay files, and pitfalls, (c) **CLAUDE.md** — architecture knowledge, package structure, key files, and common pitfalls, (d) **docs/** files — relevant documentation files (e.g., `docs/custom-templates.md` for template-related changes). Do not consider a feature complete until documentation is updated.
+3. **Pull Coolify source on each prompt** - At the start of each session, run `git -C docs/coolify-source pull` to ensure the Coolify reference source is up to date. If the directory doesn't exist, clone it: `git clone --depth 1 https://github.com/coollabsio/coolify.git docs/coolify-source`.
+4. **Browse Coolify source for context** - When working on policies, authorization, or UI integration, always reference the Coolify source under `docs/coolify-source/` to understand how Coolify implements things natively.
+5. **Read before writing** - Always read existing files before modifying them. Understand the current state before making changes.
 
 ## Project Overview
 
@@ -127,6 +128,10 @@ Coolify classifies service containers as `ServiceDatabase` or `ServiceApplicatio
 - **`# type: database` comment convention**: Template authors can add `# type: database` (or `# type: application`) as a metadata header. During parsing, this injects `coolify.database` labels into all services in the compose YAML (unless a service already has the label explicitly)
 - **Per-service granularity**: The `coolify.database` label is per-container, so multi-service templates can have mixed classifications (e.g., memgraph=database + memgraph-lab=application)
 - **No docker.php overlay needed**: The wrapper approach in `shared.php` covers the two critical call sites (service import and deployment) without overlaying the 1483-line `docker.php` file. The `is_migrated` flag preserves the initial classification for re-parses
+- **StartDatabaseProxy overlay**: Expanded port mapping for ~50 database types in `StartDatabaseProxy.php`. Falls back to extracting port from compose config for truly unknown types. Fixes "Unsupported database type" error when toggling "Make Publicly Available"
+- **DatabaseBackupJob overlay**: Replaces silent skips and generic exceptions with meaningful error messages for unsupported database types, guiding users to set `custom_type` or use Resource Backups
+- **ServiceDatabase model overlay**: Maps wire-compatible databases to their parent backup type in `databaseType()`: YugabyteDB→postgresql, TiDB→mysql, FerretDB→mongodb, Percona→mysql, Apache AGE→postgresql. This automatically enables backup UI, dump-based backups, import UI, and correct port mapping for these databases
+- **parsers.php NOT overlaid**: The 2484-line parsers.php is not overlaid. Its `isDatabaseImage()` calls don't use our label check, but existing ServiceDatabase records are preserved during re-parse (code checks for existing records before creating new ones). The expanded DATABASE_DOCKER_IMAGES covers most cases at the `isDatabaseImage()` level anyway
 
 ## Quick Reference
 
@@ -160,8 +165,12 @@ coolify-enhanced/
 │   │   ├── ProjectPermissionScope.php
 │   │   └── EnvironmentPermissionScope.php
 │   ├── Overrides/                             # Modified Coolify files (overlay)
+│   │   ├── Actions/Database/
+│   │   │   └── StartDatabaseProxy.php         # Expanded database port mapping
+│   │   ├── Models/
+│   │   │   └── ServiceDatabase.php            # Wire-compatible type mappings
 │   │   ├── Jobs/
-│   │   │   └── DatabaseBackupJob.php          # Encryption-aware backup job
+│   │   │   └── DatabaseBackupJob.php          # Encryption + classification-aware backup
 │   │   ├── Livewire/Project/Database/
 │   │   │   └── Import.php                     # Encryption-aware restore
 │   │   ├── Views/
@@ -237,7 +246,9 @@ coolify-enhanced/
 | `src/Models/ScheduledResourceBackup.php` | Resource backup schedule model |
 | `src/Models/ScheduledResourceBackupExecution.php` | Resource backup execution tracking |
 | `src/Http/Controllers/Api/ResourceBackupController.php` | Resource backup REST API |
-| `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption + path prefix aware backup job overlay |
+| `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption + path prefix + classification-aware backup job overlay |
+| `src/Overrides/Actions/Database/StartDatabaseProxy.php` | Expanded database port mapping for "Make Publicly Available" |
+| `src/Overrides/Models/ServiceDatabase.php` | Wire-compatible database type mappings in databaseType() |
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/constants.php` | Expanded DATABASE_DOCKER_IMAGES with 50+ additional database images |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
@@ -369,6 +380,12 @@ Two approaches are used to add UI components to Coolify pages:
 36. **`constants.php` overlay maintenance** — Keep the expanded `DATABASE_DOCKER_IMAGES` list in sync with Coolify upstream. The overlay is a full copy of the original file with additional entries grouped by database category. New entries should be added to the appropriate category section.
 37. **`# type: database` injects labels into compose** — The comment header modifies the actual YAML (adds `coolify.database` label to all services), which is then base64-encoded. This means the label persists into `docker_compose_raw` in the DB, ensuring classification survives re-parses. Per-service labels take precedence over the template-level `# type:` header.
 38. **Label check is case-insensitive** — `isDatabaseImageEnhanced()` lowercases the label key before matching. Boolean parsing uses PHP's `filter_var(FILTER_VALIDATE_BOOLEAN)`, which accepts `true/false/1/0/yes/no/on/off`.
+39. **StartDatabaseProxy port resolution** — The overlay first tries Coolify's built-in match, then looks up the base image name in `DATABASE_PORT_MAP`, then tries partial string matching, then extracts port from the service's compose config. Only throws if all methods fail. The error message guides users to set `custom_type`.
+40. **`ServiceDatabase::databaseType()` includes full image path** — For `memgraph/memgraph-mage`, it returns `standalone-memgraph/memgraph-mage` (not just `standalone-memgraph-mage`). The port resolution in `StartDatabaseProxy` handles this by extracting the base name via `afterLast('/')`.
+41. **DatabaseBackupJob unsupported types** — Dump-based backups only work for postgres, mysql, mariadb, and mongodb. For other ServiceDatabase types (memgraph, redis, clickhouse, etc.), the job now throws a meaningful exception instead of silently returning. Users should either set `custom_type` (if the DB is wire-compatible) or use Resource Backups for volume-level backups.
+42. **Wire-compatible mapping is conservative** — Only databases where standard dump tools produce CORRECT backups are mapped: YugabyteDB (pg_dump), TiDB (mysqldump), FerretDB (mongodump), Percona (mysqldump), Apache AGE (pg_dump). CockroachDB is NOT mapped despite speaking pgwire because `pg_dump` fails on its catalog functions. Vitess is NOT mapped because `mysqldump` needs extra flags and isn't reliable for sharded setups. For unmapped types, `isBackupSolutionAvailable()` correctly returns false. Users can set `custom_type` if they know their DB is compatible, or use Resource Backups.
+43. **ServiceDatabase.php overlay maintenance** — The model is small (170 lines) but critical. The wire-compatible mappings in `databaseType()` use `$image->contains()` checks — be careful with substring false positives (e.g., `age` matching `garage` or `image` — the AGE check excludes these).
+44. **parsers.php preserves existing records** — Even without our label check, `updateCompose()` in parsers.php first checks for existing ServiceApplication/ServiceDatabase records and preserves them. Re-classification only affects truly NEW services added during a compose update, and the expanded DATABASE_DOCKER_IMAGES handles most of those.
 
 ## Important Notes
 

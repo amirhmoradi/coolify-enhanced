@@ -5,9 +5,10 @@ Detailed instructions for AI assistants working with the Coolify Enhanced packag
 ## Mandatory Rules
 
 1. **Keep docs updated** - After every significant code change, update CLAUDE.md and AGENTS.md with new learnings, patterns, and pitfalls.
-2. **Pull Coolify source** - At the start of each session, run `git -C docs/coolify-source pull` to update the Coolify reference source. If missing, clone it: `git clone --depth 1 https://github.com/coollabsio/coolify.git docs/coolify-source`.
-3. **Reference Coolify source** - When working on policies, authorization, or UI integration, browse `docs/coolify-source/` to understand Coolify's native implementation.
-4. **Read before writing** - Always read existing files before modifying them.
+2. **Update all documentation on every feature/modification** - Every new feature, modification, or bug fix **must** include updates to: (a) **README.md** — user-facing documentation so users know how to use and configure the feature, (b) **AGENTS.md** — technical details for AI agents including architecture, overlay files, and pitfalls, (c) **CLAUDE.md** — architecture knowledge, package structure, key files, and common pitfalls, (d) **docs/** files — relevant documentation files (e.g., `docs/custom-templates.md` for template-related changes). Do not consider a feature complete until documentation is updated.
+3. **Pull Coolify source** - At the start of each session, run `git -C docs/coolify-source pull` to update the Coolify reference source. If missing, clone it: `git clone --depth 1 https://github.com/coollabsio/coolify.git docs/coolify-source`.
+4. **Reference Coolify source** - When working on policies, authorization, or UI integration, browse `docs/coolify-source/` to understand Coolify's native implementation.
+5. **Read before writing** - Always read existing files before modifying them.
 
 ## Package Context
 
@@ -15,8 +16,11 @@ This is a **Laravel package** that extends Coolify v4 with:
 
 1. **Granular permissions** — Project-level and environment-level access management
 2. **Encrypted S3 backups** — Transparent encryption at rest using rclone's crypt backend
+3. **Resource Backups** — Volume, configuration, and full backups for Applications, Services, and Databases
+4. **Custom Template Sources** — External GitHub repositories as sources for docker-compose service templates
+5. **Enhanced Database Classification** — Expanded database image detection, `coolify.database` Docker label, `# type: database` comment convention, wire-compatible backup support, and expanded port mapping
 
-It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption, modified Coolify files are overlaid in the Docker image.
+It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption, backup, classification, and template features, modified Coolify files are overlaid in the Docker image.
 
 ### Key Characteristics
 
@@ -285,6 +289,23 @@ Modified Coolify files that are copied over originals in the Docker image:
 
 **shared.php** (`Overrides/Helpers/shared.php`)
 - Modifies `get_service_templates()` to merge custom templates from enabled sources alongside built-in ones
+- Defines `isDatabaseImageEnhanced()` wrapper that checks `coolify.database` Docker labels before falling back to `isDatabaseImage()`
+- Injects `coolify.database` labels from `# type: database` comment headers into compose YAML
+
+**constants.php** (`Overrides/Helpers/constants.php`)
+- Overlay of `bootstrap/helpers/constants.php` with ~50 additional database images
+- Categories: graph, vector, time-series, document, search, key-value, column-family, NewSQL, OLAP
+- Must be kept in sync with Coolify upstream (full file copy with additions)
+
+**StartDatabaseProxy** (`Overrides/Actions/Database/StartDatabaseProxy.php`)
+- Expanded `DATABASE_PORT_MAP` constant mapping ~50 database base image names to default internal ports
+- Multi-level fallback: built-in match → base image lookup → partial string match → compose port extraction → helpful error
+- Fixes "Unsupported database type" error when toggling "Make Publicly Available" for unrecognized databases
+
+**ServiceDatabase** (`Overrides/Models/ServiceDatabase.php`)
+- Expanded `databaseType()` with wire-compatible database mappings: YugabyteDB→postgresql, TiDB→mysql, FerretDB→mongodb, Percona→mysql, Apache AGE→postgresql
+- This automatically enables backup UI, dump-based backups, import UI, and correct port mapping for wire-compatible databases
+- Conservative mapping: only databases where standard dump tools produce correct backups are mapped (CockroachDB, Vitess, ScyllaDB are NOT mapped)
 
 ### Policies
 
@@ -591,6 +612,14 @@ PermissionService::grantEnvironmentAccess($user, $environment, 'view_only');
 13. **Filename encryption breaks S3 listing** — When `filename_encryption != 'off'`, files on S3 have encrypted names. Cannot use Laravel Storage driver for listing/deleting; must use rclone.
 14. **Custom template `_source` passes through to frontend** — `parseTemplateContent()` adds `_source` and `_source_uuid` to each template object. In `Select.php::loadServices()`, the `+ (array) $service` merge preserves these fields, so Alpine.js can access `service._source` to render source labels.
 15. **Select.blade.php overlay is a full page copy** — The New Resource select overlay copies the entire original view with minimal additions (source label badge + doc icon shift). Mark enhanced additions with `{{-- Coolify Enhanced: ... --}}` comments. Must be kept in sync with upstream Coolify changes.
+16. **`isDatabaseImageEnhanced()` wrapper** — Defined in `shared.php`, NOT `docker.php`. Checks `coolify.database` label in both map format (`coolify.database: "true"`) and array format (`- coolify.database=true`) before delegating to `isDatabaseImage()`. Only covers 2 call sites in shared.php (service import + deployment), not 4 in parsers.php. This is intentional: parsers.php handles Application compose, not Service templates.
+17. **`constants.php` overlay maintenance** — Full copy of the original with ~50 additional entries grouped by database category. Must be kept in sync with Coolify upstream. New entries should be added to the appropriate category section.
+18. **`# type: database` injects labels into compose** — The comment header modifies actual YAML (adds `coolify.database` label to all services), which is then base64-encoded. Label persists into `docker_compose_raw` in DB, ensuring classification survives re-parses. Per-service labels take precedence.
+19. **Label check is case-insensitive** — `isDatabaseImageEnhanced()` lowercases the label key. Boolean parsing uses `filter_var(FILTER_VALIDATE_BOOLEAN)`, which accepts `true/false/1/0/yes/no/on/off`.
+20. **StartDatabaseProxy port resolution** — Tries built-in match first, then `DATABASE_PORT_MAP` lookup by base image, then partial string match, then compose port extraction, then helpful error guiding user to set `custom_type`.
+21. **Wire-compatible mapping is conservative** — Only YugabyteDB (pg_dump), TiDB (mysqldump), FerretDB (mongodump), Percona (mysqldump), Apache AGE (pg_dump). CockroachDB NOT mapped (pg_dump fails on catalog). Vitess NOT mapped (mysqldump unreliable for sharded setups). Users can set `custom_type` for manual override.
+22. **ServiceDatabase.php overlay maintenance** — Small (170 lines) but critical. Wire-compatible mappings use `$image->contains()` — watch for substring false positives (e.g., `age` matching `garage` or `image`; the AGE check excludes these).
+23. **parsers.php preserves existing records** — Even without our label check, `updateCompose()` preserves existing ServiceApplication/ServiceDatabase records. Re-classification only affects truly NEW services, and the expanded DATABASE_DOCKER_IMAGES handles most cases.
 
 ## Coolify Source Reference
 
@@ -611,6 +640,10 @@ The Coolify source code is cloned at `docs/coolify-source/` (gitignored). Key re
 | `resources/views/livewire/project/new/select.blade.php` | New Resource page view (service card rendering) |
 | `templates/compose/` | Built-in service templates (YAML format reference) |
 | `bootstrap/helpers/shared.php` | Helper functions including `get_service_templates()` |
+| `bootstrap/helpers/constants.php` | `DATABASE_DOCKER_IMAGES` constant (our overlay expands this) |
+| `bootstrap/helpers/docker.php` | `isDatabaseImage()` function (NOT overlaid — wrapper in shared.php) |
+| `app/Actions/Database/StartDatabaseProxy.php` | Database proxy with port mapping (our overlay expands ports) |
+| `app/Models/ServiceDatabase.php` | Service database model with `databaseType()` (our overlay adds wire-compat mappings) |
 
 ## Version Compatibility
 
