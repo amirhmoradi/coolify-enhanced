@@ -306,6 +306,20 @@ Modified Coolify files that are copied over originals in the Docker image:
 - Expanded `databaseType()` with wire-compatible database mappings: YugabyteDB→postgresql, TiDB→mysql, FerretDB→mongodb, Percona→mysql, Apache AGE→postgresql
 - This automatically enables backup UI, dump-based backups, import UI, and correct port mapping for wire-compatible databases
 - Conservative mapping: only databases where standard dump tools produce correct backups are mapped (CockroachDB, Vitess, ScyllaDB are NOT mapped)
+- Added `proxy_ports` JSON cast, `getServiceDatabaseUrls()` for multi-port URL generation, `parseProxyPortsLabel()` for parsing the `coolify.proxyPorts` Docker label
+
+**Service/Index.php** (`Overrides/Livewire/Project/Service/Index.php`)
+- Full overlay of Coolify's Service Index Livewire component
+- Adds multi-port proxy support: detects `coolify.proxyPorts` label from `docker_compose_raw`, renders per-port toggle/public-port UI
+- New properties: `proxyPorts`, `availableProxyPorts`, `hasMultiPortProxy`
+- Enhanced `instantSave()` to branch to `instantSaveMultiPort()` when multi-port label detected
+- `updateProxyPorts()` saves port config and restarts proxy container if running
+- Falls back to stock single-port UI when label is absent
+
+**service/index.blade.php** (`Overrides/Views/livewire/project/service/index.blade.php`)
+- Full overlay of Coolify's service index Blade view
+- `@if ($hasMultiPortProxy)` branch shows per-port table with checkboxes and public port inputs
+- Falls back to original single-port toggle when multi-port is not available
 
 ### Policies
 
@@ -620,6 +634,11 @@ PermissionService::grantEnvironmentAccess($user, $environment, 'view_only');
 21. **Wire-compatible mapping is conservative** — Only YugabyteDB (pg_dump), TiDB (mysqldump), FerretDB (mongodump), Percona (mysqldump), Apache AGE (pg_dump). CockroachDB NOT mapped (pg_dump fails on catalog). Vitess NOT mapped (mysqldump unreliable for sharded setups). Users can set `custom_type` for manual override.
 22. **ServiceDatabase.php overlay maintenance** — Small (170 lines) but critical. Wire-compatible mappings use `$image->contains()` — watch for substring false positives (e.g., `age` matching `garage` or `image`; the AGE check excludes these).
 23. **parsers.php preserves existing records** — Even without our label check, `updateCompose()` preserves existing ServiceApplication/ServiceDatabase records. Re-classification only affects truly NEW services, and the expanded DATABASE_DOCKER_IMAGES handles most cases.
+24. **Multi-port proxy label format** — `coolify.proxyPorts` label: `"internalPort:label,internalPort:label,..."` (e.g., `"7687:bolt,7444:log-viewer"`). Parsed by `ServiceDatabase::parseProxyPortsLabel()`. Label name is case-sensitive.
+25. **Multi-port proxy backward compat** — When `coolify.proxyPorts` label is absent from compose, `$hasMultiPortProxy` is `false` and the view shows stock Coolify single-port UI. No behavioral changes for databases without the label.
+26. **Multi-port `proxy_ports` JSON** — Schema: `{"7687": {"public_port": 17687, "label": "bolt", "enabled": true}, ...}`. Keys are internal port strings. Initialized from label defaults on first Livewire component mount.
+27. **Service/Index.php overlay size** — ~560 lines, full copy of Coolify's original. Multi-port changes are marked with `[MULTI-PORT PROXY OVERLAY]` comments. Keep in sync with upstream.
+28. **Multi-port nginx** — `StartDatabaseProxy::handleMultiPort()` generates multiple `server` blocks in one nginx `stream` context. All ports share one proxy container. `StopDatabaseProxy` needs no changes (just `docker rm -f`).
 
 ## Coolify Source Reference
 
@@ -643,7 +662,8 @@ The Coolify source code is cloned at `docs/coolify-source/` (gitignored). Key re
 | `bootstrap/helpers/constants.php` | `DATABASE_DOCKER_IMAGES` constant (our overlay expands this) |
 | `bootstrap/helpers/docker.php` | `isDatabaseImage()` function (NOT overlaid — wrapper in shared.php) |
 | `app/Actions/Database/StartDatabaseProxy.php` | Database proxy with port mapping (our overlay expands ports) |
-| `app/Models/ServiceDatabase.php` | Service database model with `databaseType()` (our overlay adds wire-compat mappings) |
+| `app/Models/ServiceDatabase.php` | Service database model with `databaseType()` (our overlay adds wire-compat mappings + multi-port proxy) |
+| `app/Livewire/Project/Service/Index.php` | Service index Livewire component (our overlay adds multi-port proxy UI logic) |
 
 ## Version Compatibility
 

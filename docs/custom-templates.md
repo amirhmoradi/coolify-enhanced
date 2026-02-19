@@ -316,6 +316,45 @@ labels:
 
 Boolean parsing is flexible: accepts `true/false`, `1/0`, `yes/no`, `on/off` (case-insensitive).
 
+### Multi-Port Proxy: `coolify.proxyPorts` Label
+
+Databases that expose multiple ports (e.g., Memgraph with bolt on 7687 and log viewer on 7444) can declare them via the `coolify.proxyPorts` label. This enables the multi-port proxy UI in Coolify, allowing users to independently toggle and assign public ports for each internal port.
+
+```yaml
+services:
+  memgraph:
+    image: memgraph/memgraph:latest
+    labels:
+      coolify.database: "true"
+      coolify.proxyPorts: "7687:bolt,7444:log-viewer"
+```
+
+**Label format:** `"internalPort:label,internalPort:label,..."`
+
+| Component | Description |
+|-----------|-------------|
+| `internalPort` | The container port number (integer) |
+| `label` | Human-readable name shown in the UI (e.g., "bolt", "log-viewer", "admin-ui") |
+
+**Key points:**
+
+- When present, the "Make Publicly Available" section shows a per-port table instead of a single toggle
+- Each port can be independently enabled/disabled with its own public port number
+- The label name is case-sensitive: must be `coolify.proxyPorts` (not `coolify.proxyports`)
+- Works alongside `coolify.database: "true"` — the service must be classified as a database for the proxy to work
+- If the label is absent, the standard single-port proxy UI is shown (fully backward compatible)
+
+**Example: Neo4j with bolt + HTTP + HTTPS:**
+
+```yaml
+services:
+  neo4j:
+    image: neo4j:5
+    labels:
+      coolify.database: "true"
+      coolify.proxyPorts: "7687:bolt,7474:browser,7473:browser-ssl"
+```
+
 ## Repository Structure
 
 A template source repository must contain YAML files in a configurable folder path. The default expected structure is:

@@ -131,6 +131,7 @@ Coolify classifies service containers as `ServiceDatabase` or `ServiceApplicatio
 - **StartDatabaseProxy overlay**: Expanded port mapping for ~50 database types in `StartDatabaseProxy.php`. Falls back to extracting port from compose config for truly unknown types. Fixes "Unsupported database type" error when toggling "Make Publicly Available"
 - **DatabaseBackupJob overlay**: Replaces silent skips and generic exceptions with meaningful error messages for unsupported database types, guiding users to set `custom_type` or use Resource Backups
 - **ServiceDatabase model overlay**: Maps wire-compatible databases to their parent backup type in `databaseType()`: YugabyteDB→postgresql, TiDB→mysql, FerretDB→mongodb, Percona→mysql, Apache AGE→postgresql. This automatically enables backup UI, dump-based backups, import UI, and correct port mapping for these databases
+- **Multi-port database proxy**: `coolify.proxyPorts` Docker label convention (e.g., `"7687:bolt,7444:log-viewer"`) enables proxying multiple TCP ports for a single ServiceDatabase container. Stored in `proxy_ports` JSON column on `service_databases` table. Service/Index.php Livewire overlay detects the label from `docker_compose_raw` and renders per-port toggle/public-port UI. `StartDatabaseProxy` generates multiple nginx `stream` server blocks. Falls back to single-port UI when label is absent
 - **parsers.php NOT overlaid**: The 2484-line parsers.php is not overlaid. Its `isDatabaseImage()` calls don't use our label check, but existing ServiceDatabase records are preserved during re-parse (code checks for existing records before creating new ones). The expanded DATABASE_DOCKER_IMAGES covers most cases at the `isDatabaseImage()` level anyway
 
 ## Quick Reference
@@ -173,6 +174,8 @@ coolify-enhanced/
 │   │   │   └── DatabaseBackupJob.php          # Encryption + classification-aware backup
 │   │   ├── Livewire/Project/Database/
 │   │   │   └── Import.php                     # Encryption-aware restore
+│   │   ├── Livewire/Project/Service/
+│   │   │   └── Index.php                      # Multi-port proxy support
 │   │   ├── Views/
 │   │   │   ├── livewire/storage/
 │   │   │   │   └── show.blade.php             # Storage page with encryption form
@@ -182,6 +185,7 @@ coolify-enhanced/
 │   │   │   ├── livewire/project/database/
 │   │   │   │   └── configuration.blade.php    # DB config + Resource Backups sidebar
 │   │   │   ├── livewire/project/service/
+│   │   │   │   ├── index.blade.php            # Service DB view with multi-port proxy UI
 │   │   │   │   └── configuration.blade.php    # Service config + Resource Backups sidebar
 │   │   │   ├── livewire/project/new/
 │   │   │   │   └── select.blade.php         # New Resource page + custom source labels
@@ -248,7 +252,9 @@ coolify-enhanced/
 | `src/Http/Controllers/Api/ResourceBackupController.php` | Resource backup REST API |
 | `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption + path prefix + classification-aware backup job overlay |
 | `src/Overrides/Actions/Database/StartDatabaseProxy.php` | Expanded database port mapping for "Make Publicly Available" |
-| `src/Overrides/Models/ServiceDatabase.php` | Wire-compatible database type mappings in databaseType() |
+| `src/Overrides/Models/ServiceDatabase.php` | Wire-compatible database type mappings + multi-port proxy support |
+| `src/Overrides/Livewire/Project/Service/Index.php` | Service DB view overlay with multi-port proxy logic |
+| `src/Overrides/Views/livewire/project/service/index.blade.php` | Service DB view with multi-port proxy UI |
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/constants.php` | Expanded DATABASE_DOCKER_IMAGES with 50+ additional database images |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
@@ -332,6 +338,7 @@ Two approaches are used to add UI components to Coolify pages:
   - **Resource Configuration** (`project/application/configuration.blade.php`, etc.) — adds "Resource Backups" sidebar item + `@elseif` content section that renders `enhanced::resource-backup-manager`
   - **Server Sidebar** (`components/server/sidebar.blade.php`) — adds "Resource Backups" sidebar item
   - **Settings Navbar** (`components/settings/navbar.blade.php`) — adds "Restore" tab linking to restore/import page
+  - **Service Index** (`project/service/index.blade.php`) — multi-port proxy UI for ServiceDatabase with `coolify.proxyPorts` label
   - **New Resource Select** (`project/new/select.blade.php`) — adds custom template source name labels on service cards
 
 **Why view overlays for backups?** The configuration pages use `$currentRoute` to conditionally render content. Adding a sidebar item requires both the `<a>` link in the sidebar AND an `@elseif` branch in the content area. This can only be done in the Blade view — not via middleware or JavaScript. The backup manager component (`enhanced::resource-backup-manager`) needs proper Livewire hydration, which requires native rendering in the view.
@@ -386,6 +393,12 @@ Two approaches are used to add UI components to Coolify pages:
 42. **Wire-compatible mapping is conservative** — Only databases where standard dump tools produce CORRECT backups are mapped: YugabyteDB (pg_dump), TiDB (mysqldump), FerretDB (mongodump), Percona (mysqldump), Apache AGE (pg_dump). CockroachDB is NOT mapped despite speaking pgwire because `pg_dump` fails on its catalog functions. Vitess is NOT mapped because `mysqldump` needs extra flags and isn't reliable for sharded setups. For unmapped types, `isBackupSolutionAvailable()` correctly returns false. Users can set `custom_type` if they know their DB is compatible, or use Resource Backups.
 43. **ServiceDatabase.php overlay maintenance** — The model is small (170 lines) but critical. The wire-compatible mappings in `databaseType()` use `$image->contains()` checks — be careful with substring false positives (e.g., `age` matching `garage` or `image` — the AGE check excludes these).
 44. **parsers.php preserves existing records** — Even without our label check, `updateCompose()` in parsers.php first checks for existing ServiceApplication/ServiceDatabase records and preserves them. Re-classification only affects truly NEW services added during a compose update, and the expanded DATABASE_DOCKER_IMAGES handles most of those.
+45. **Multi-port proxy label format** — `coolify.proxyPorts` label value is `"internalPort:label,internalPort:label,..."` (e.g., `"7687:bolt,7444:log-viewer"`). Parsed by `ServiceDatabase::parseProxyPortsLabel()`. The label name is case-sensitive (lowercase `coolify.proxyPorts`).
+46. **Multi-port proxy coexistence** — When `coolify.proxyPorts` label is absent, the Service/Index.php overlay behaves identically to stock Coolify (single `is_public`/`public_port` toggle). The multi-port UI only appears when the label is detected in `docker_compose_raw`.
+47. **Multi-port proxy_ports JSON schema** — `service_databases.proxy_ports` stores `{"7687": {"public_port": 17687, "label": "bolt", "enabled": true}, ...}`. Keys are internal port strings. Initialized from the label's defaults on first component mount.
+48. **Service/Index.php overlay maintenance** — Full copy of Coolify's `app/Livewire/Project/Service/Index.php` (~560 lines). Multi-port additions are marked with `[MULTI-PORT PROXY OVERLAY]` comments. Must be kept in sync with upstream changes to the original component.
+49. **Multi-port proxy nginx config** — `StartDatabaseProxy::handleMultiPort()` generates multiple `server` blocks in a single nginx `stream` context. Each server block listens on its own public port and proxy_passes to the container's internal port. All ports share one proxy container.
+50. **Multi-port StopDatabaseProxy** — No changes needed. `StopDatabaseProxy` simply does `docker rm -f {uuid}-proxy`, which stops the single proxy container handling all ports.
 
 ## Important Notes
 

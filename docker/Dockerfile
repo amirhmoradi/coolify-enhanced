@@ -90,6 +90,14 @@ COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.bl
 COPY --chown=www-data:www-data src/Overrides/Helpers/shared.php \
     /var/www/html/bootstrap/helpers/shared.php
 
+# Override Service/Index Livewire component with multi-port proxy support
+COPY --chown=www-data:www-data src/Overrides/Livewire/Project/Service/Index.php \
+    /var/www/html/app/Livewire/Project/Service/Index.php
+
+# Override service index view with multi-port proxy UI
+COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/service/index.blade.php \
+    /var/www/html/resources/views/livewire/project/service/index.blade.php
+
 # Override New Resource select view to show custom template source labels
 COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/new/select.blade.php \
     /var/www/html/resources/views/livewire/project/new/select.blade.php

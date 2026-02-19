@@ -4,14 +4,18 @@
 // OVERLAY: Modified version of Coolify's ServiceDatabase model
 // =============================================================================
 // This file replaces app/Models/ServiceDatabase.php in the Coolify container.
-// Changes from the original are marked with [DATABASE CLASSIFICATION OVERLAY].
+// Changes from the original are marked with [DATABASE CLASSIFICATION OVERLAY]
+// and [MULTI-PORT PROXY OVERLAY].
 //
-// Modification:
+// Modifications:
 //   1. Expanded databaseType() to map wire-compatible databases to their parent
 //      backup type (e.g., YugabyteDB → postgresql, TiDB → mysql, FerretDB → mongodb)
 //   2. This automatically fixes isBackupSolutionAvailable(), DatabaseBackupJob
 //      dump commands, import UI visibility, and StartDatabaseProxy port mapping
 //      for all wire-compatible database types
+//   3. Added proxy_ports JSON cast and getServiceDatabaseUrls() for multi-port
+//      proxy support via coolify.proxyPorts Docker label
+//   4. Added parseProxyPortsLabel() helper to parse label format
 // =============================================================================
 
 namespace App\Models;
@@ -24,6 +28,12 @@ class ServiceDatabase extends BaseModel
     use HasFactory, SoftDeletes;
 
     protected $guarded = [];
+
+    // [MULTI-PORT PROXY OVERLAY] — Cast proxy_ports as array for multi-port proxy support
+    protected $casts = [
+        'proxy_ports' => 'array',
+    ];
+    // [END MULTI-PORT PROXY OVERLAY]
 
     protected static function booted()
     {
@@ -167,6 +177,68 @@ class ServiceDatabase extends BaseModel
 
         return "{$realIp}:{$port}";
     }
+
+    // [MULTI-PORT PROXY OVERLAY] — Return all public URLs for multi-port proxy
+    public function getServiceDatabaseUrls(): array
+    {
+        if (empty($this->proxy_ports)) {
+            return $this->is_public && $this->public_port
+                ? [['url' => $this->getServiceDatabaseUrl(), 'label' => 'primary', 'internal_port' => null]]
+                : [];
+        }
+
+        $urls = [];
+        $proxyPorts = is_array($this->proxy_ports) ? $this->proxy_ports : json_decode($this->proxy_ports, true);
+        foreach ($proxyPorts as $internal => $config) {
+            if (! ($config['enabled'] ?? false)) {
+                continue;
+            }
+            $publicPort = $config['public_port'] ?? null;
+            if (! $publicPort) {
+                continue;
+            }
+            $realIp = $this->service->server->ip;
+            if ($this->service->server->isLocalhost() || isDev()) {
+                $realIp = base_ip();
+            }
+            $urls[] = [
+                'url' => "{$realIp}:{$publicPort}",
+                'label' => $config['label'] ?? "port-{$internal}",
+                'internal_port' => (int) $internal,
+            ];
+        }
+
+        return $urls;
+    }
+
+    /**
+     * Parse a coolify.proxyPorts label value into a structured array.
+     * Format: "internalPort:label,internalPort:label,..."
+     * Example: "7687:bolt,7444:log-viewer"
+     */
+    public static function parseProxyPortsLabel(string $label): array
+    {
+        $result = [];
+        foreach (explode(',', $label) as $entry) {
+            $entry = trim($entry);
+            if (empty($entry)) {
+                continue;
+            }
+            $parts = explode(':', $entry, 2);
+            $port = (int) trim($parts[0]);
+            $name = isset($parts[1]) ? trim($parts[1]) : "port-{$port}";
+            if ($port > 0) {
+                $result[(string) $port] = [
+                    'public_port' => null,
+                    'label' => $name,
+                    'enabled' => false,
+                ];
+            }
+        }
+
+        return $result;
+    }
+    // [END MULTI-PORT PROXY OVERLAY]
 
     public function team()
     {

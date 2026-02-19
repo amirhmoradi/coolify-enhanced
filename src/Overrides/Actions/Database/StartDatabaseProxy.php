@@ -5,12 +5,15 @@
 // =============================================================================
 // This file replaces app/Actions/Database/StartDatabaseProxy.php in the
 // Coolify container.
-// Changes from the original are marked with [DATABASE CLASSIFICATION OVERLAY].
+// Changes from the original are marked with [DATABASE CLASSIFICATION OVERLAY]
+// and [MULTI-PORT PROXY OVERLAY].
 //
-// Modification:
+// Modifications:
 //   1. Replaced the hardcoded internal port match with an expanded mapping
 //      covering ~50 additional database types (graph, vector, time-series, etc.)
 //   2. Added fallback logic to extract port from compose config for unknown types
+//   3. Multi-port proxy support: when ServiceDatabase has proxy_ports JSON,
+//      generates multiple nginx server blocks and exposes all enabled ports
 // =============================================================================
 
 namespace App\Actions\Database;
@@ -136,6 +139,14 @@ class StartDatabaseProxy
             $containerName = "{$database->name}-{$database->service->uuid}";
         }
 
+        // [MULTI-PORT PROXY OVERLAY] — Check for multi-port proxy configuration
+        if ($database instanceof ServiceDatabase && ! empty($database->proxy_ports)) {
+            $this->handleMultiPort($database, $containerName, $proxyContainerName, $network, $server);
+
+            return;
+        }
+        // [END MULTI-PORT PROXY OVERLAY]
+
         // [DATABASE CLASSIFICATION OVERLAY] — Try built-in types first, then expanded mapping
         $internalPort = match ($databaseType) {
             'standalone-mariadb', 'standalone-mysql' => 3306,
@@ -224,6 +235,96 @@ class StartDatabaseProxy
             "docker compose --project-directory {$configuration_dir} up -d",
         ], $server);
     }
+
+    // [MULTI-PORT PROXY OVERLAY] — Handle multi-port proxy for ServiceDatabase with proxy_ports
+    private function handleMultiPort(ServiceDatabase $database, string $containerName, string $proxyContainerName, string $network, $server): void
+    {
+        $proxyPorts = is_array($database->proxy_ports)
+            ? $database->proxy_ports
+            : json_decode($database->proxy_ports, true);
+
+        // Build nginx server blocks and docker port mappings for all enabled ports
+        $serverBlocks = '';
+        $dockerPorts = [];
+        foreach ($proxyPorts as $internalPort => $config) {
+            if (! ($config['enabled'] ?? false)) {
+                continue;
+            }
+            $publicPort = (int) $config['public_port'];
+            if ($publicPort <= 0) {
+                continue;
+            }
+            $serverBlocks .= "   server {\n";
+            $serverBlocks .= "        listen {$publicPort};\n";
+            $serverBlocks .= "        proxy_pass {$containerName}:{$internalPort};\n";
+            $serverBlocks .= "   }\n";
+            $dockerPorts[] = "{$publicPort}:{$publicPort}";
+        }
+
+        if (empty($dockerPorts)) {
+            // No enabled ports — fall through to stop proxy if it exists
+            instant_remote_process(["docker rm -f $proxyContainerName"], $server, false);
+
+            return;
+        }
+
+        $configuration_dir = database_proxy_dir($database->uuid);
+        if (isDev()) {
+            $configuration_dir = '/var/lib/docker/volumes/coolify_dev_coolify_data/_data/databases/'.$database->uuid.'/proxy';
+        }
+
+        $nginxconf = "user  nginx;\nworker_processes  auto;\n\nerror_log  /var/log/nginx/error.log;\n\nevents {\n    worker_connections  1024;\n}\nstream {\n{$serverBlocks}}";
+
+        $docker_compose = [
+            'services' => [
+                $proxyContainerName => [
+                    'image' => 'nginx:stable-alpine',
+                    'container_name' => $proxyContainerName,
+                    'restart' => RESTART_MODE,
+                    'ports' => $dockerPorts,
+                    'networks' => [
+                        $network,
+                    ],
+                    'volumes' => [
+                        [
+                            'type' => 'bind',
+                            'source' => "$configuration_dir/nginx.conf",
+                            'target' => '/etc/nginx/nginx.conf',
+                        ],
+                    ],
+                    'healthcheck' => [
+                        'test' => [
+                            'CMD-SHELL',
+                            'stat /etc/nginx/nginx.conf || exit 1',
+                        ],
+                        'interval' => '5s',
+                        'timeout' => '5s',
+                        'retries' => 3,
+                        'start_period' => '1s',
+                    ],
+                ],
+            ],
+            'networks' => [
+                $network => [
+                    'external' => true,
+                    'name' => $network,
+                    'attachable' => true,
+                ],
+            ],
+        ];
+
+        $dockercompose_base64 = base64_encode(Yaml::dump($docker_compose, 4, 2));
+        $nginxconf_base64 = base64_encode($nginxconf);
+        instant_remote_process(["docker rm -f $proxyContainerName"], $server, false);
+        instant_remote_process([
+            "mkdir -p $configuration_dir",
+            "echo '{$nginxconf_base64}' | base64 -d | tee $configuration_dir/nginx.conf > /dev/null",
+            "echo '{$dockercompose_base64}' | base64 -d | tee $configuration_dir/docker-compose.yaml > /dev/null",
+            "docker compose --project-directory {$configuration_dir} pull",
+            "docker compose --project-directory {$configuration_dir} up -d",
+        ], $server);
+    }
+    // [END MULTI-PORT PROXY OVERLAY]
 
     // [DATABASE CLASSIFICATION OVERLAY] — Resolve internal port for unknown database types
     private function resolveInternalPort(string $databaseType, $database): int
