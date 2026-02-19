@@ -44,6 +44,10 @@ COPY --chown=www-data:www-data src/Overrides/Jobs/DatabaseBackupJob.php \
 COPY --chown=www-data:www-data src/Overrides/Actions/Database/StartDatabaseProxy.php \
     /var/www/html/app/Actions/Database/StartDatabaseProxy.php
 
+# Override ServiceDatabase model with wire-compatible database type mappings
+COPY --chown=www-data:www-data src/Overrides/Models/ServiceDatabase.php \
+    /var/www/html/app/Models/ServiceDatabase.php
+
 # Override Import Livewire component with encryption-aware version
 COPY --chown=www-data:www-data src/Overrides/Livewire/Project/Database/Import.php \
     /var/www/html/app/Livewire/Project/Database/Import.php

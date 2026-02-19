@@ -129,6 +129,8 @@ Coolify classifies service containers as `ServiceDatabase` or `ServiceApplicatio
 - **No docker.php overlay needed**: The wrapper approach in `shared.php` covers the two critical call sites (service import and deployment) without overlaying the 1483-line `docker.php` file. The `is_migrated` flag preserves the initial classification for re-parses
 - **StartDatabaseProxy overlay**: Expanded port mapping for ~50 database types in `StartDatabaseProxy.php`. Falls back to extracting port from compose config for truly unknown types. Fixes "Unsupported database type" error when toggling "Make Publicly Available"
 - **DatabaseBackupJob overlay**: Replaces silent skips and generic exceptions with meaningful error messages for unsupported database types, guiding users to set `custom_type` or use Resource Backups
+- **ServiceDatabase model overlay**: Maps wire-compatible databases to their parent backup type in `databaseType()`: YugabyteDB→postgresql, TiDB→mysql, FerretDB→mongodb, Percona→mysql, Apache AGE→postgresql. This automatically enables backup UI, dump-based backups, import UI, and correct port mapping for these databases
+- **parsers.php NOT overlaid**: The 2484-line parsers.php is not overlaid. Its `isDatabaseImage()` calls don't use our label check, but existing ServiceDatabase records are preserved during re-parse (code checks for existing records before creating new ones). The expanded DATABASE_DOCKER_IMAGES covers most cases at the `isDatabaseImage()` level anyway
 
 ## Quick Reference
 
@@ -164,6 +166,8 @@ coolify-enhanced/
 │   ├── Overrides/                             # Modified Coolify files (overlay)
 │   │   ├── Actions/Database/
 │   │   │   └── StartDatabaseProxy.php         # Expanded database port mapping
+│   │   ├── Models/
+│   │   │   └── ServiceDatabase.php            # Wire-compatible type mappings
 │   │   ├── Jobs/
 │   │   │   └── DatabaseBackupJob.php          # Encryption + classification-aware backup
 │   │   ├── Livewire/Project/Database/
@@ -243,6 +247,7 @@ coolify-enhanced/
 | `src/Http/Controllers/Api/ResourceBackupController.php` | Resource backup REST API |
 | `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption + path prefix + classification-aware backup job overlay |
 | `src/Overrides/Actions/Database/StartDatabaseProxy.php` | Expanded database port mapping for "Make Publicly Available" |
+| `src/Overrides/Models/ServiceDatabase.php` | Wire-compatible database type mappings in databaseType() |
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
 | `src/Overrides/Helpers/constants.php` | Expanded DATABASE_DOCKER_IMAGES with 50+ additional database images |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
@@ -377,7 +382,9 @@ Two approaches are used to add UI components to Coolify pages:
 39. **StartDatabaseProxy port resolution** — The overlay first tries Coolify's built-in match, then looks up the base image name in `DATABASE_PORT_MAP`, then tries partial string matching, then extracts port from the service's compose config. Only throws if all methods fail. The error message guides users to set `custom_type`.
 40. **`ServiceDatabase::databaseType()` includes full image path** — For `memgraph/memgraph-mage`, it returns `standalone-memgraph/memgraph-mage` (not just `standalone-memgraph-mage`). The port resolution in `StartDatabaseProxy` handles this by extracting the base name via `afterLast('/')`.
 41. **DatabaseBackupJob unsupported types** — Dump-based backups only work for postgres, mysql, mariadb, and mongodb. For other ServiceDatabase types (memgraph, redis, clickhouse, etc.), the job now throws a meaningful exception instead of silently returning. Users should either set `custom_type` (if the DB is wire-compatible) or use Resource Backups for volume-level backups.
-42. **`isBackupSolutionAvailable()` is NOT overridden** — The ServiceDatabase model method still returns false for unknown types. This is intentional: making the backup UI visible for types that can't actually be backed up via dump would be misleading. The `custom_type` field serves as the user-controlled escape hatch.
+42. **Wire-compatible mapping is conservative** — Only databases where standard dump tools produce CORRECT backups are mapped: YugabyteDB (pg_dump), TiDB (mysqldump), FerretDB (mongodump), Percona (mysqldump), Apache AGE (pg_dump). CockroachDB is NOT mapped despite speaking pgwire because `pg_dump` fails on its catalog functions. Vitess is NOT mapped because `mysqldump` needs extra flags and isn't reliable for sharded setups. For unmapped types, `isBackupSolutionAvailable()` correctly returns false. Users can set `custom_type` if they know their DB is compatible, or use Resource Backups.
+43. **ServiceDatabase.php overlay maintenance** — The model is small (170 lines) but critical. The wire-compatible mappings in `databaseType()` use `$image->contains()` checks — be careful with substring false positives (e.g., `age` matching `garage` or `image` — the AGE check excludes these).
+44. **parsers.php preserves existing records** — Even without our label check, `updateCompose()` in parsers.php first checks for existing ServiceApplication/ServiceDatabase records and preserves them. Re-classification only affects truly NEW services added during a compose update, and the expanded DATABASE_DOCKER_IMAGES handles most of those.
 
 ## Important Notes
 
