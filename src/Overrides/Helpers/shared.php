@@ -4,11 +4,14 @@
 // OVERLAY: Modified version of Coolify's bootstrap/helpers/shared.php
 // =============================================================================
 // This file replaces bootstrap/helpers/shared.php in the Coolify container.
-// Changes from the original are marked with [CUSTOM TEMPLATES OVERLAY] comments.
+// Changes from the original are marked with overlay comments:
 //
-// The only modification is to get_service_templates() which now merges
-// custom template sources (from GitHub repos) alongside built-in templates
-// when the coolify-enhanced addon is enabled.
+// [CUSTOM TEMPLATES OVERLAY] — get_service_templates() merges custom template
+//   sources (from GitHub repos) alongside built-in templates.
+//
+// [DATABASE CLASSIFICATION OVERLAY] — isDatabaseImageEnhanced() wrapper checks
+//   for 'coolify.database' Docker label before falling back to isDatabaseImage().
+//   Replaces isDatabaseImage() calls at service import and deployment sites.
 // =============================================================================
 
 use App\Enums\ApplicationDeploymentStatus;
@@ -532,6 +535,40 @@ function sslip(Server $server)
     return "http://{$server->ip}.sslip.io";
 }
 
+// [DATABASE CLASSIFICATION OVERLAY] — Enhanced isDatabaseImage with label override
+// Checks for a 'coolify.database' Docker label in the service config before
+// falling back to Coolify's standard isDatabaseImage() detection.
+// This allows template authors to explicitly classify services as databases
+// using 'coolify.database=true' in their compose labels.
+function isDatabaseImageEnhanced(?string $image = null, ?array $serviceConfig = null): bool
+{
+    // Check for explicit 'coolify.database' label override
+    if (! is_null($serviceConfig)) {
+        $labels = data_get($serviceConfig, 'labels', []);
+
+        if (is_array($labels)) {
+            foreach ($labels as $key => $value) {
+                // Labels can be in map format (key: value) or array format (key=value)
+                if (is_string($key) && strtolower($key) === 'coolify.database') {
+                    // Map format: coolify.database: "true"
+                    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+                }
+                if (is_string($value)) {
+                    // Array format: "coolify.database=true"
+                    $parts = explode('=', $value, 2);
+                    if (count($parts) === 2 && strtolower(trim($parts[0])) === 'coolify.database') {
+                        return filter_var(trim($parts[1]), FILTER_VALIDATE_BOOLEAN);
+                    }
+                }
+            }
+        }
+    }
+
+    // No label override — fall back to standard image detection
+    return isDatabaseImage($image, $serviceConfig);
+}
+// [END DATABASE CLASSIFICATION OVERLAY]
+
 // [CUSTOM TEMPLATES OVERLAY] — Modified to merge custom template sources
 function get_service_templates(bool $force = false): Collection
 {
@@ -596,6 +633,33 @@ function get_service_templates(bool $force = false): Collection
                 if (! is_array($json) || ! isset($json['services'])) {
                     return [];
                 }
+
+                // [DATABASE CLASSIFICATION OVERLAY] — Inject coolify.database label from # type: header
+                $typeOverride = strtolower(trim($data->get('type', '')));
+                if (in_array($typeOverride, ['database', 'application'], true)) {
+                    $labelValue = $typeOverride === 'database' ? 'true' : 'false';
+                    foreach ($json['services'] as $sn => &$sc) {
+                        $existingLabels = $sc['labels'] ?? [];
+                        $hasLabel = false;
+                        if (is_array($existingLabels)) {
+                            foreach ($existingLabels as $lk => $lv) {
+                                if ((is_string($lk) && strtolower($lk) === 'coolify.database') ||
+                                    (is_string($lv) && str_starts_with(strtolower($lv), 'coolify.database='))) {
+                                    $hasLabel = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (! $hasLabel) {
+                            if (! isset($sc['labels']) || ! is_array($sc['labels'])) {
+                                $sc['labels'] = [];
+                            }
+                            $sc['labels']['coolify.database'] = $labelValue;
+                        }
+                    }
+                    unset($sc);
+                }
+                // [END DATABASE CLASSIFICATION OVERLAY]
 
                 $compose = base64_encode(\Symfony\Component\Yaml\Yaml::dump($json, 10, 2));
 
@@ -1517,8 +1581,8 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                     $isDatabase = (bool) $migratedDb;
                     $savedService = $migratedApp ?: $migratedDb;
                 } else {
-                    // Use image detection for non-migrated services
-                    $isDatabase = isDatabaseImage($image, $service);
+                    // [DATABASE CLASSIFICATION OVERLAY] — Use enhanced detection with label support
+                    $isDatabase = isDatabaseImageEnhanced($image, $service);
 
                     // Create new serviceApplication or serviceDatabase
                     if ($isDatabase) {
@@ -2511,9 +2575,9 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                 data_set($service, 'depends_on', $serviceDependencies->toArray());
             }
 
-            // Decide if the service is a database
+            // [DATABASE CLASSIFICATION OVERLAY] — Use enhanced detection with label support
             $image = data_get_str($service, 'image');
-            $isDatabase = isDatabaseImage($image, $service);
+            $isDatabase = isDatabaseImageEnhanced($image, $service);
             data_set($service, 'is_database', $isDatabase);
 
             // Collect/create/update networks

@@ -300,6 +300,38 @@ class TemplateSourceService
             return null;
         }
 
+        // Inject 'coolify.database' label when '# type: database' or '# type: application'
+        // comment header is present. This allows template authors to explicitly control
+        // how Coolify classifies each service container (ServiceDatabase vs ServiceApplication).
+        $typeOverride = strtolower(trim($data->get('type', '')));
+        if (in_array($typeOverride, ['database', 'application'], true)) {
+            $labelValue = $typeOverride === 'database' ? 'true' : 'false';
+            foreach ($yaml['services'] as $svcName => &$svcConfig) {
+                // Only inject if the service doesn't already have the label
+                $existingLabels = $svcConfig['labels'] ?? [];
+                $hasExplicitLabel = false;
+
+                if (is_array($existingLabels)) {
+                    foreach ($existingLabels as $lk => $lv) {
+                        if ((is_string($lk) && strtolower($lk) === 'coolify.database') ||
+                            (is_string($lv) && str_starts_with(strtolower($lv), 'coolify.database='))) {
+                            $hasExplicitLabel = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (! $hasExplicitLabel) {
+                    // Use map format for labels (key: value)
+                    if (! isset($svcConfig['labels']) || ! is_array($svcConfig['labels'])) {
+                        $svcConfig['labels'] = [];
+                    }
+                    $svcConfig['labels']['coolify.database'] = $labelValue;
+                }
+            }
+            unset($svcConfig); // break reference
+        }
+
         // Run injection validation if the function exists (it's in Coolify's parsers.php)
         if (function_exists('validateDockerComposeForInjection')) {
             try {

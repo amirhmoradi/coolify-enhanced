@@ -44,6 +44,10 @@ COPY --chown=www-data:www-data src/Overrides/Jobs/DatabaseBackupJob.php \
 COPY --chown=www-data:www-data src/Overrides/Livewire/Project/Database/Import.php \
     /var/www/html/app/Livewire/Project/Database/Import.php
 
+# Override constants helper with expanded DATABASE_DOCKER_IMAGES list
+COPY --chown=www-data:www-data src/Overrides/Helpers/constants.php \
+    /var/www/html/bootstrap/helpers/constants.php
+
 # Override databases helper with encryption-aware version
 COPY --chown=www-data:www-data src/Overrides/Helpers/databases.php \
     /var/www/html/bootstrap/helpers/databases.php

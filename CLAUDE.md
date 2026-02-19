@@ -19,6 +19,7 @@ This is a Laravel package that extends Coolify v4 with three main features:
 2. **Encrypted S3 Backups** — Transparent encryption at rest for all backups using rclone's crypt backend (NaCl SecretBox: XSalsa20 + Poly1305)
 3. **Resource Backups** — Volume, configuration, and full backups for Applications, Services, and Databases (beyond Coolify's database-only backup)
 4. **Custom Template Sources** — Add external GitHub repositories as sources for docker-compose service templates, extending Coolify's one-click service list
+5. **Enhanced Database Classification** — Expanded database image detection list and `coolify.database` label/`# type: database` comment convention for explicit service classification
 
 It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image.
 
@@ -117,6 +118,16 @@ Extends Coolify's built-in service template system to support external GitHub re
 - **Auto-sync**: Configurable cron schedule (default: every 6 hours) for automatic template updates
 - **Settings UI**: "Templates" tab in Settings with source management, sync controls, and template preview
 
+### Enhanced Database Classification Architecture
+
+Coolify classifies service containers as `ServiceDatabase` or `ServiceApplication` based on the `isDatabaseImage()` function in `bootstrap/helpers/docker.php`, which checks against a hardcoded `DATABASE_DOCKER_IMAGES` constant. Many database images (memgraph, milvus, qdrant, cassandra, etc.) are missing from this list. This feature solves the classification problem through three complementary mechanisms:
+
+- **Expanded `DATABASE_DOCKER_IMAGES`**: Overlay of `constants.php` adds ~50 additional database images covering graph, vector, time-series, document, search, column-family, NewSQL, and OLAP databases
+- **`coolify.database` Docker label**: The `isDatabaseImageEnhanced()` wrapper in `shared.php` checks for a `coolify.database=true|false` label in service config before falling back to `isDatabaseImage()`. Works in both template YAML and arbitrary docker-compose files
+- **`# type: database` comment convention**: Template authors can add `# type: database` (or `# type: application`) as a metadata header. During parsing, this injects `coolify.database` labels into all services in the compose YAML (unless a service already has the label explicitly)
+- **Per-service granularity**: The `coolify.database` label is per-container, so multi-service templates can have mixed classifications (e.g., memgraph=database + memgraph-lab=application)
+- **No docker.php overlay needed**: The wrapper approach in `shared.php` covers the two critical call sites (service import and deployment) without overlaying the 1483-line `docker.php` file. The `is_migrated` flag preserves the initial classification for re-parses
+
 ## Quick Reference
 
 ### Package Structure
@@ -170,6 +181,7 @@ coolify-enhanced/
 │   │   │   └── components/server/
 │   │   │       └── sidebar.blade.php          # Server sidebar + Resource Backups item
 │   │   └── Helpers/
+│   │       ├── constants.php                   # Expanded DATABASE_DOCKER_IMAGES
 │   │       ├── databases.php                  # Encryption-aware S3 delete
 │   │       └── shared.php                     # Custom templates in get_service_templates()
 │   ├── Jobs/
@@ -227,6 +239,7 @@ coolify-enhanced/
 | `src/Http/Controllers/Api/ResourceBackupController.php` | Resource backup REST API |
 | `src/Overrides/Jobs/DatabaseBackupJob.php` | Encryption + path prefix aware backup job overlay |
 | `src/Overrides/Livewire/Project/Database/Import.php` | Encryption-aware restore overlay |
+| `src/Overrides/Helpers/constants.php` | Expanded DATABASE_DOCKER_IMAGES with 50+ additional database images |
 | `src/Overrides/Helpers/databases.php` | Encryption-aware S3 delete overlay |
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
 | `src/Livewire/ResourceBackupPage.php` | Server resource backups page component |
@@ -352,6 +365,10 @@ Two approaches are used to add UI components to Coolify pages:
 32. **Ignored/untested templates (`_ignored` flag)** — Coolify's `generate:services` command skips templates with `# ignore: true`, so they never appear in the JSON. The shared.php overlay loads these directly from YAML files on disk (`templates/compose/*.yaml`) and includes them with `_ignored: true`. Custom templates from `TemplateSourceService` also preserve `_ignored` instead of skipping. The select.blade.php overlay shows an amber "Untested" badge and requires user confirmation via `confirm()` before proceeding.
 33. **Doc icon stacking with badges** — When a service card has both `_source` and `_ignored` badges, the doc icon shifts down further (`top: 2.25rem`). With only one badge, it shifts to `top: 1.25rem`. The `_ignored` badge itself shifts down (`top: 1.05rem`) when a `_source` label is also present.
 34. **Source filter dropdown** — The New Resource page has a "Filter by source" dropdown next to the category filter. Uses `selectedSource` state: empty string = all, `__official__` = built-in only, or a specific source name. The dropdown only appears when `sources.length > 0`. Sources are extracted from `_source` fields after `loadServices()`.
+35. **`isDatabaseImageEnhanced()` wrapper** — Defined in `shared.php` overlay, not in `docker.php`. Checks `coolify.database` label in both map format (`coolify.database: "true"`) and array format (`- coolify.database=true`) before delegating to Coolify's `isDatabaseImage()`. Only covers the 2 call sites in shared.php (service import + deployment), not the 4 in parsers.php (application deployments). This is intentional: parsers.php calls handle Application compose, not Service templates.
+36. **`constants.php` overlay maintenance** — Keep the expanded `DATABASE_DOCKER_IMAGES` list in sync with Coolify upstream. The overlay is a full copy of the original file with additional entries grouped by database category. New entries should be added to the appropriate category section.
+37. **`# type: database` injects labels into compose** — The comment header modifies the actual YAML (adds `coolify.database` label to all services), which is then base64-encoded. This means the label persists into `docker_compose_raw` in the DB, ensuring classification survives re-parses. Per-service labels take precedence over the template-level `# type:` header.
+38. **Label check is case-insensitive** — `isDatabaseImageEnhanced()` lowercases the label key before matching. Boolean parsing uses PHP's `filter_var(FILTER_VALIDATE_BOOLEAN)`, which accepts `true/false/1/0/yes/no/on/off`.
 
 ## Important Notes
 
@@ -364,6 +381,7 @@ Two approaches are used to add UI components to Coolify pages:
 7. **S3 path prefix** - Configurable per-storage path prefix for multi-instance bucket sharing
 8. **Resource backups** - Volume, configuration, and full backups via `enhanced::resource-backup-manager` component
 9. **Custom templates** - External GitHub repos as template sources, managed via Settings > Templates page
+10. **Database classification** - Expanded image list + `coolify.database` label + `# type: database` comment for explicit service classification
 
 ## See Also
 
