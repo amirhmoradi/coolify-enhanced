@@ -2,6 +2,7 @@
 
 namespace AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api;
 
+use AmirhMoradi\CoolifyEnhanced\Jobs\ProxyMigrationJob;
 use AmirhMoradi\CoolifyEnhanced\Models\ManagedNetwork;
 use AmirhMoradi\CoolifyEnhanced\Models\ResourceNetwork;
 use AmirhMoradi\CoolifyEnhanced\Services\NetworkService;
@@ -116,6 +117,42 @@ class NetworkController extends Controller
         return response()->json([
             'message' => 'Network sync complete',
             'discovered' => $networks->count(),
+        ]);
+    }
+
+    /**
+     * Run proxy isolation migration for a server.
+     */
+    public function migrateProxy(string $serverUuid)
+    {
+        $server = Server::ownedByCurrentTeam()->where('uuid', $serverUuid)->firstOrFail();
+
+        if (! config('coolify-enhanced.network_management.proxy_isolation', false)) {
+            return response()->json(['error' => 'Proxy isolation is not enabled'], 422);
+        }
+
+        ProxyMigrationJob::dispatch($server);
+
+        return response()->json(['message' => 'Proxy migration job dispatched']);
+    }
+
+    /**
+     * Disconnect proxy from non-proxy networks.
+     */
+    public function cleanupProxy(string $serverUuid)
+    {
+        $server = Server::ownedByCurrentTeam()->where('uuid', $serverUuid)->firstOrFail();
+
+        if (! config('coolify-enhanced.network_management.proxy_isolation', false)) {
+            return response()->json(['error' => 'Proxy isolation is not enabled'], 422);
+        }
+
+        $results = NetworkService::disconnectProxyFromNonProxyNetworks($server);
+        $count = count(array_filter($results));
+
+        return response()->json([
+            'message' => "Disconnected proxy from {$count} non-proxy network(s)",
+            'disconnected' => array_keys(array_filter($results)),
         ]);
     }
 

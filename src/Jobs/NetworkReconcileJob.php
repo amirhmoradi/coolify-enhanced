@@ -174,6 +174,11 @@ class NetworkReconcileJob implements ShouldQueue
 
         NetworkService::reconcileServer($server);
 
+        // Ensure proxy container is connected to proxy network if proxy isolation is enabled
+        if (config('coolify-enhanced.network_management.proxy_isolation', false)) {
+            NetworkService::connectProxyContainer($server);
+        }
+
         Log::info('NetworkReconcileJob: Full server reconciliation complete', [
             'server' => $server->name,
         ]);

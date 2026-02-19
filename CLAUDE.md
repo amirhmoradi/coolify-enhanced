@@ -131,11 +131,12 @@ Coolify classifies service containers as `ServiceDatabase` or `ServiceApplicatio
 
 ### Network Management Architecture
 
-Provides per-environment Docker network isolation using post-deployment hooks and periodic reconciliation — with **zero overlay files** for the core feature. This is Phase 1 of the network management system.
+Provides per-environment Docker network isolation (Phase 1) and proxy network isolation (Phase 2). Phase 1 uses zero overlay files; Phase 2 adds two small overlays (`proxy.php`, `docker.php`).
+
+#### Phase 1: Environment Network Isolation (zero overlays)
 
 - **Post-deployment hook approach**: Instead of overlaying Coolify's 4130-line `ApplicationDeploymentJob.php`, the system uses Docker-level network manipulation. After Coolify deploys a resource normally, event listeners trigger `NetworkReconcileJob` which connects containers to managed networks via `docker network connect`.
 - **Per-environment isolation**: Each environment gets its own Docker bridge network (`ce-env-{env_uuid}`). Resources within an environment can communicate by container name (DNS). Cross-environment communication requires explicit shared networks.
-- **Dedicated proxy network (opt-in)**: When enabled, creates a `ce-proxy-{server_uuid}` network. Only resources with FQDNs join it. Prevents proxy from having network-level access to internal-only services.
 - **Shared networks**: User-created networks (`ce-shared-{uuid}`) that resources from any environment can explicitly join, enabling cross-environment communication.
 - **Event-driven reconciliation**: Listens for `ApplicationStatusChanged`, `ServiceStatusChanged`, and `DatabaseStatusChanged` events. Dispatches `NetworkReconcileJob` with a configurable delay (default 3s) after deployment.
 - **Verify-on-use strategy**: No periodic SSH-heavy sync. Networks are reconciled at deployment, on UI page load (60s cache), and via explicit "Sync Networks" button.
@@ -144,6 +145,16 @@ Provides per-environment Docker network isolation using post-deployment hooks an
 - **Three isolation modes**: `none` (manual only), `environment` (auto-create per-env networks), `strict` (also disconnects from default `coolify` network).
 - **Standalone Docker only**: Phase 1 targets bridge networks. Swarm overlay support is Phase 3 (deferred until demand justifies compose-level overlay cost).
 - **Network limit**: Configurable max per server (default 200) to prevent Docker iptables performance degradation.
+
+#### Phase 2: Proxy Network Isolation (two overlays)
+
+- **Dedicated proxy network**: Creates `ce-proxy-{server_uuid}` per server. Only resources with FQDNs join it. Prevents proxy from having network-level access to internal-only services.
+- **`traefik.docker.network` label injection**: The `docker.php` overlay adds an optional `$proxyNetwork` parameter to `fqdnLabelsForTraefik()` and `fqdnLabelsForCaddy()`. When proxy isolation is enabled, `generateLabelsApplication()` resolves the proxy network name and passes it. This ensures Traefik always routes through the correct network IP — preventing intermittent 502 errors in multi-network setups.
+- **Proxy compose integration**: The `proxy.php` overlay modifies `connectProxyToNetworks()`, `collectDockerNetworksByServer()`, `generateDefaultProxyConfiguration()`, and `ensureProxyNetworksExist()` to include/prefer the dedicated proxy network when `COOLIFY_PROXY_ISOLATION=true`.
+- **Service label coverage**: The existing `shared.php` overlay is updated to pass `proxyNetwork` to all `fqdnLabelsForTraefik/Caddy` calls for Services and docker-compose Applications.
+- **Migration workflow**: `ProxyMigrationJob` creates proxy network, connects `coolify-proxy` container, and connects all FQDN-bearing resources. After all resources are redeployed, optional cleanup disconnects proxy from non-proxy networks.
+- **Dynamic label generation**: Proxy network name is resolved at label generation time (not stored in DB), so moving a resource to a different server always uses the correct proxy network name.
+- **No parsers.php overlay**: The `parsers.php` call sites (8 calls) are NOT overlaid. Post-deployment reconciliation ensures containers end up on the correct network regardless.
 
 ## Quick Reference
 
@@ -204,11 +215,14 @@ coolify-enhanced/
 │   │   └── Helpers/
 │   │       ├── constants.php                   # Expanded DATABASE_DOCKER_IMAGES
 │   │       ├── databases.php                  # Encryption-aware S3 delete
-│   │       └── shared.php                     # Custom templates in get_service_templates()
+│   │       ├── shared.php                     # Custom templates + proxy network labels
+│   │       ├── proxy.php                      # Proxy network isolation (Phase 2)
+│   │       └── docker.php                     # Traefik/Caddy proxy label injection (Phase 2)
 │   ├── Jobs/
 │   │   ├── ResourceBackupJob.php              # Volume/config/full backup job
 │   │   ├── SyncTemplateSourceJob.php          # Background GitHub template sync
-│   │   └── NetworkReconcileJob.php            # Post-deploy network reconciliation
+│   │   ├── NetworkReconcileJob.php            # Post-deploy network reconciliation
+│   │   └── ProxyMigrationJob.php             # Proxy isolation migration for existing servers
 │   ├── Http/
 │   │   ├── Controllers/Api/                   # API controllers
 │   │   │   ├── CustomTemplateSourceController.php # Template source management API
@@ -283,7 +297,10 @@ coolify-enhanced/
 | `src/Livewire/CustomTemplateSources.php` | Settings page for managing template sources |
 | `src/Jobs/SyncTemplateSourceJob.php` | Background job for syncing templates from GitHub |
 | `src/Http/Controllers/Api/CustomTemplateSourceController.php` | REST API for template sources |
-| `src/Services/NetworkService.php` | Docker network operations, reconciliation, auto-provisioning |
+| `src/Overrides/Helpers/proxy.php` | Proxy network isolation in proxy compose + connectivity |
+| `src/Overrides/Helpers/docker.php` | Traefik/Caddy proxy network label injection |
+| `src/Jobs/ProxyMigrationJob.php` | Proxy isolation migration for existing servers |
+| `src/Services/NetworkService.php` | Docker network operations, reconciliation, proxy isolation |
 | `src/Models/ManagedNetwork.php` | Docker network model (env, shared, proxy, system scopes) |
 | `src/Models/ResourceNetwork.php` | Polymorphic pivot: resource-to-network membership |
 | `src/Jobs/NetworkReconcileJob.php` | Post-deployment network assignment job |
@@ -417,6 +434,13 @@ Two approaches are used to add UI components to Coolify pages:
 43. **Shared networks are for cross-environment communication** — Resources from different environments cannot communicate by default (separate bridge networks). Users must create shared networks and manually attach resources to enable cross-env connectivity.
 44. **Network limit per server** — Default 200. Docker bridge networks consume iptables rules (~10 per network). At 200+ networks, `iptables -L` performance degrades. The limit is configurable via `COOLIFY_MAX_NETWORKS` env var.
 45. **PR preview deployments do NOT auto-join environment networks** — Preview deploys create their own `{app_uuid}-{pr_id}` network. The reconcile job only triggers for the main resource, not PR previews. This is intentional: previews should not access production databases.
+46. **`traefik.docker.network` is NOT optional for multi-network setups** — Without it, Traefik randomly selects which network IP to route to, causing intermittent 502 errors that depend on Docker's internal network ordering (changes on restart). Phase 2's proxy isolation overlay injects this label automatically.
+47. **Proxy network label is dynamic, not DB-stored** — The proxy network name is resolved at label generation time from `ManagedNetwork` table, not stored in the resource's `custom_labels`. This prevents stale labels when resources move between servers.
+48. **proxy.php overlay covers 4 functions** — `connectProxyToNetworks()`, `collectDockerNetworksByServer()`, `generateDefaultProxyConfiguration()`, `ensureProxyNetworksExist()`. Each has a `[PROXY ISOLATION OVERLAY]` marked block guarded by dual config check (`proxy_isolation` + `enabled`).
+49. **docker.php overlay covers 3 functions** — `fqdnLabelsForTraefik()` (+optional `$proxyNetwork` param), `fqdnLabelsForCaddy()` (+optional `$proxyNetwork` param), `generateLabelsApplication()` (+proxy network resolution). All marked with `[PROXY ISOLATION OVERLAY]`.
+50. **parsers.php is NOT overlaid** — Its 8 `fqdnLabelsFor*` calls don't pass `proxyNetwork`. Post-deployment reconciliation via `NetworkReconcileJob` ensures containers join the proxy network anyway.
+51. **Proxy migration is a 2-step process** — Step 1: Run "Proxy Migration" (creates network, connects proxy + FQDN resources). Step 2: After ALL resources redeployed, optionally "Cleanup Old Networks" to disconnect proxy from non-proxy networks.
+52. **Default network kept during migration** — `connectProxyToNetworks()` always includes the default `coolify`/`coolify-overlay` network alongside proxy networks, ensuring backward compatibility until migration is complete.
 
 ## Important Notes
 
@@ -431,7 +455,9 @@ Two approaches are used to add UI components to Coolify pages:
 9. **Custom templates** - External GitHub repos as template sources, managed via Settings > Templates page
 10. **Database classification** - Expanded image list + `coolify.database` label + `# type: database` comment for explicit service classification
 11. **Network management** - Per-environment Docker network isolation via `COOLIFY_NETWORK_MANAGEMENT=true`. Modes: `none`, `environment`, `strict`. Proxy isolation via `COOLIFY_PROXY_ISOLATION=true`
-12. **Network management has zero overlays** - Phase 1 uses post-deployment hooks + Docker API. No overlay files required for core networking features
+12. **Phase 1 has zero overlays** - Environment isolation uses post-deployment hooks + Docker API. No overlay files required
+13. **Phase 2 adds two overlays** - `proxy.php` (proxy compose isolation) + `docker.php` (Traefik/Caddy label injection). The existing `shared.php` overlay is also updated for service labels
+14. **Proxy migration** - After enabling `COOLIFY_PROXY_ISOLATION=true`, run "Proxy Migration" from Server > Networks page. All FQDN resources join the proxy network; new deployments auto-join
 
 ## See Also
 

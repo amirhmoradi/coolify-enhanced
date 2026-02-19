@@ -2,6 +2,7 @@
 
 namespace AmirhMoradi\CoolifyEnhanced\Livewire;
 
+use AmirhMoradi\CoolifyEnhanced\Jobs\ProxyMigrationJob;
 use AmirhMoradi\CoolifyEnhanced\Models\ManagedNetwork;
 use AmirhMoradi\CoolifyEnhanced\Services\NetworkService;
 use App\Models\Server;
@@ -110,6 +111,45 @@ class NetworkManager extends Component
         }
     }
 
+    /**
+     * Run proxy isolation migration for this server.
+     *
+     * Creates the proxy network, connects the proxy container,
+     * and connects all FQDN-bearing resources to the proxy network.
+     */
+    public function migrateProxyIsolation(): void
+    {
+        if (! config('coolify-enhanced.network_management.proxy_isolation', false)) {
+            $this->dispatch('error', 'Proxy isolation is not enabled. Set COOLIFY_PROXY_ISOLATION=true first.');
+
+            return;
+        }
+
+        try {
+            ProxyMigrationJob::dispatch($this->server);
+            $this->dispatch('success', 'Proxy migration job dispatched. Check server logs for progress.');
+        } catch (\Throwable $e) {
+            $this->dispatch('error', 'Failed to dispatch migration: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Disconnect proxy from non-proxy networks.
+     *
+     * Only safe to run after all resources have been redeployed
+     * with traefik.docker.network labels.
+     */
+    public function cleanupProxyNetworks(): void
+    {
+        try {
+            $results = NetworkService::disconnectProxyFromNonProxyNetworks($this->server);
+            $count = count(array_filter($results));
+            $this->dispatch('success', "Disconnected proxy from {$count} non-proxy network(s).");
+        } catch (\Throwable $e) {
+            $this->dispatch('error', 'Failed to cleanup proxy networks: '.$e->getMessage());
+        }
+    }
+
     public function render()
     {
         $managedNetworks = ManagedNetwork::forServer($this->server)
@@ -118,8 +158,15 @@ class NetworkManager extends Component
             ->orderBy('name')
             ->get();
 
+        $proxyIsolationEnabled = config('coolify-enhanced.network_management.proxy_isolation', false);
+        $proxyNetwork = $proxyIsolationEnabled
+            ? ManagedNetwork::forServer($this->server)->proxy()->active()->first()
+            : null;
+
         return view('coolify-enhanced::livewire.network-manager', [
             'managedNetworks' => $managedNetworks,
+            'proxyIsolationEnabled' => $proxyIsolationEnabled,
+            'proxyNetwork' => $proxyNetwork,
         ]);
     }
 }

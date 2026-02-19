@@ -82,6 +82,14 @@ COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.bl
 COPY --chown=www-data:www-data src/Overrides/Helpers/shared.php \
     /var/www/html/bootstrap/helpers/shared.php
 
+# Override proxy helper for proxy network isolation (Phase 2)
+COPY --chown=www-data:www-data src/Overrides/Helpers/proxy.php \
+    /var/www/html/bootstrap/helpers/proxy.php
+
+# Override docker helper for Traefik/Caddy proxy network label injection (Phase 2)
+COPY --chown=www-data:www-data src/Overrides/Helpers/docker.php \
+    /var/www/html/bootstrap/helpers/docker.php
+
 # Override New Resource select view to show custom template source labels
 COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/new/select.blade.php \
     /var/www/html/resources/views/livewire/project/new/select.blade.php

@@ -83,6 +83,12 @@ Route::middleware(['auth:sanctum', 'api.sensitive'])->prefix('v1')->group(functi
     Route::post('/servers/{uuid}/networks/sync', [NetworkController::class, 'sync'])
         ->middleware('api.ability:write');
 
+    Route::post('/servers/{uuid}/networks/migrate-proxy', [NetworkController::class, 'migrateProxy'])
+        ->middleware('api.ability:write');
+
+    Route::post('/servers/{uuid}/networks/cleanup-proxy', [NetworkController::class, 'cleanupProxy'])
+        ->middleware('api.ability:write');
+
     Route::get('/resources/{type}/{uuid}/networks', [NetworkController::class, 'resourceNetworks'])
         ->middleware('api.ability:read');
 

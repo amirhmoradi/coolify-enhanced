@@ -12,6 +12,10 @@
 // [DATABASE CLASSIFICATION OVERLAY] — isDatabaseImageEnhanced() wrapper checks
 //   for 'coolify.database' Docker label before falling back to isDatabaseImage().
 //   Replaces isDatabaseImage() calls at service import and deployment sites.
+//
+// [PROXY ISOLATION OVERLAY] — fqdnLabelsForTraefik/Caddy calls in loadServices()
+//   pass proxyNetwork parameter for traefik.docker.network label injection when
+//   COOLIFY_PROXY_ISOLATION=true. Covers Service and Application label generation.
 // =============================================================================
 
 use App\Enums\ApplicationDeploymentStatus;
@@ -2084,6 +2088,17 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                 $serviceLabels = $serviceLabels->merge($defaultLabels);
                 if (! $isDatabase && $fqdns->count() > 0) {
                     if ($fqdns) {
+                        // [PROXY ISOLATION OVERLAY] Resolve proxy network for service label injection
+                        $proxyNetworkName = null;
+                        if (config('coolify-enhanced.network_management.proxy_isolation', false)
+                            && config('coolify-enhanced.network_management.enabled', false)) {
+                            try {
+                                $proxyNet = \AmirhMoradi\CoolifyEnhanced\Models\ManagedNetwork::where('server_id', $resource->server->id)
+                                    ->where('is_proxy_network', true)->where('status', 'active')->first();
+                                $proxyNetworkName = $proxyNet?->docker_network_name;
+                            } catch (\Throwable $e) {}
+                        }
+                        // [END PROXY ISOLATION OVERLAY]
                         $shouldGenerateLabelsExactly = $resource->server->settings->generate_exact_labels;
                         if ($shouldGenerateLabelsExactly) {
                             switch ($resource->server->proxyType()) {
@@ -2096,7 +2111,8 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                         is_gzip_enabled: $savedService->isGzipEnabled(),
                                         is_stripprefix_enabled: $savedService->isStripprefixEnabled(),
                                         service_name: $serviceName,
-                                        image: data_get($service, 'image')
+                                        image: data_get($service, 'image'),
+                                        proxyNetwork: $proxyNetworkName,
                                     ));
                                     break;
                                 case ProxyTypes::CADDY->value:
@@ -2109,7 +2125,8 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                         is_gzip_enabled: $savedService->isGzipEnabled(),
                                         is_stripprefix_enabled: $savedService->isStripprefixEnabled(),
                                         service_name: $serviceName,
-                                        image: data_get($service, 'image')
+                                        image: data_get($service, 'image'),
+                                        proxyNetwork: $proxyNetworkName,
                                     ));
                                     break;
                             }
@@ -2122,7 +2139,8 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                 is_gzip_enabled: $savedService->isGzipEnabled(),
                                 is_stripprefix_enabled: $savedService->isStripprefixEnabled(),
                                 service_name: $serviceName,
-                                image: data_get($service, 'image')
+                                image: data_get($service, 'image'),
+                                proxyNetwork: $proxyNetworkName,
                             ));
                             $serviceLabels = $serviceLabels->merge(fqdnLabelsForCaddy(
                                 network: $resource->destination->network,
@@ -2133,7 +2151,8 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                 is_gzip_enabled: $savedService->isGzipEnabled(),
                                 is_stripprefix_enabled: $savedService->isStripprefixEnabled(),
                                 service_name: $serviceName,
-                                image: data_get($service, 'image')
+                                image: data_get($service, 'image'),
+                                proxyNetwork: $proxyNetworkName,
                             ));
                         }
                     }
@@ -2858,6 +2877,17 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                 });
                             }
                         }
+                        // [PROXY ISOLATION OVERLAY] Resolve proxy network for application label injection
+                        $appProxyNetworkName = null;
+                        if (config('coolify-enhanced.network_management.proxy_isolation', false)
+                            && config('coolify-enhanced.network_management.enabled', false)) {
+                            try {
+                                $appProxyNet = \AmirhMoradi\CoolifyEnhanced\Models\ManagedNetwork::where('server_id', $server->id)
+                                    ->where('is_proxy_network', true)->where('status', 'active')->first();
+                                $appProxyNetworkName = $appProxyNet?->docker_network_name;
+                            } catch (\Throwable $e) {}
+                        }
+                        // [END PROXY ISOLATION OVERLAY]
                         $shouldGenerateLabelsExactly = $server->settings->generate_exact_labels;
                         if ($shouldGenerateLabelsExactly) {
                             switch ($server->proxyType()) {
@@ -2872,6 +2902,7 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                             is_force_https_enabled: $resource->isForceHttpsEnabled(),
                                             is_gzip_enabled: $resource->isGzipEnabled(),
                                             is_stripprefix_enabled: $resource->isStripprefixEnabled(),
+                                            proxyNetwork: $appProxyNetworkName,
                                         )
                                     );
                                     break;
@@ -2886,6 +2917,7 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                             is_force_https_enabled: $resource->isForceHttpsEnabled(),
                                             is_gzip_enabled: $resource->isGzipEnabled(),
                                             is_stripprefix_enabled: $resource->isStripprefixEnabled(),
+                                            proxyNetwork: $appProxyNetworkName,
                                         )
                                     );
                                     break;
@@ -2901,6 +2933,7 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                     is_force_https_enabled: $resource->isForceHttpsEnabled(),
                                     is_gzip_enabled: $resource->isGzipEnabled(),
                                     is_stripprefix_enabled: $resource->isStripprefixEnabled(),
+                                    proxyNetwork: $appProxyNetworkName,
                                 )
                             );
                             $serviceLabels = $serviceLabels->merge(
@@ -2913,6 +2946,7 @@ function parseDockerComposeFile(Service|Application $resource, bool $isNew = fal
                                     is_force_https_enabled: $resource->isForceHttpsEnabled(),
                                     is_gzip_enabled: $resource->isGzipEnabled(),
                                     is_stripprefix_enabled: $resource->isStripprefixEnabled(),
+                                    proxyNetwork: $appProxyNetworkName,
                                 )
                             );
                         }

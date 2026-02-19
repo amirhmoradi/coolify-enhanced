@@ -63,5 +63,30 @@
                 </div>
             </div>
         </div>
+
+        {{-- Proxy isolation --}}
+        <div class="p-4 bg-coolgray-100 rounded">
+            <h3 class="pb-2">Proxy Network Isolation</h3>
+            <div class="text-sm text-neutral-300 pb-3">
+                When enabled, resources with FQDNs join a dedicated proxy network (<code class="text-purple-400">ce-proxy-{'{server_uuid}'}</code>)
+                instead of sharing the default <code>coolify</code> network with all containers.
+            </div>
+            <div class="flex flex-col gap-3 text-sm">
+                <div>
+                    <span class="font-bold text-purple-400">How it works:</span>
+                    <ul class="list-disc list-inside text-neutral-400 mt-1 space-y-1">
+                        <li>A dedicated proxy network is created per server</li>
+                        <li>The reverse proxy (Traefik/Caddy) joins this network</li>
+                        <li>Resources with FQDNs auto-join the proxy network on deployment</li>
+                        <li><code>traefik.docker.network</code> labels ensure consistent routing (no random 502s)</li>
+                        <li>Internal services without FQDNs remain invisible to the proxy</li>
+                    </ul>
+                </div>
+                <div>
+                    <span class="font-bold text-warning">Migration:</span>
+                    <span class="text-neutral-400">After enabling, go to Server > Networks and run "Proxy Migration" to connect existing resources. New deployments auto-join.</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

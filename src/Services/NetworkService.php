@@ -877,6 +877,206 @@ class NetworkService
     }
 
     /**
+     * Get the proxy network name for a server.
+     *
+     * Returns the Docker network name of the active proxy network,
+     * or null if proxy isolation is disabled or no proxy network exists.
+     */
+    public static function getProxyNetworkName(Server $server): ?string
+    {
+        if (! config('coolify-enhanced.network_management.proxy_isolation', false)
+            || ! config('coolify-enhanced.network_management.enabled', false)) {
+            return null;
+        }
+
+        $proxyNetwork = ManagedNetwork::where('server_id', $server->id)
+            ->where('is_proxy_network', true)
+            ->where('status', ManagedNetwork::STATUS_ACTIVE)
+            ->first();
+
+        return $proxyNetwork?->docker_network_name;
+    }
+
+    /**
+     * Connect the proxy container (coolify-proxy) to the proxy network.
+     *
+     * Called during proxy isolation migration and reconciliation to ensure
+     * the reverse proxy can reach resources on the proxy network.
+     */
+    public static function connectProxyContainer(Server $server): bool
+    {
+        $proxyNetwork = static::ensureProxyNetwork($server);
+
+        return static::connectContainer($server, $proxyNetwork->docker_network_name, 'coolify-proxy');
+    }
+
+    /**
+     * Disconnect proxy from networks that are NOT proxy networks.
+     *
+     * Used after proxy isolation migration is complete and all resources
+     * have been redeployed with traefik.docker.network labels.
+     * Keeps the default coolify/coolify-overlay network for safety.
+     */
+    public static function disconnectProxyFromNonProxyNetworks(Server $server): array
+    {
+        $results = [];
+        $defaultNetwork = $server->isSwarm() ? 'coolify-overlay' : 'coolify';
+
+        // Get networks the proxy is currently connected to
+        $inspection = static::inspectNetwork($server, 'coolify-proxy');
+        // Can't inspect a container as a network — use docker inspect instead
+        try {
+            $output = instant_remote_process(
+                ['docker inspect --format=\'{{json .NetworkSettings.Networks}}\' coolify-proxy 2>/dev/null'],
+                $server
+            );
+
+            $connectedNetworks = array_keys(json_decode($output, true) ?? []);
+        } catch (\Throwable $e) {
+            Log::warning('NetworkService: Failed to inspect proxy container networks', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $results;
+        }
+
+        // Get proxy network names
+        $proxyNetworkNames = ManagedNetwork::where('server_id', $server->id)
+            ->where('is_proxy_network', true)
+            ->pluck('docker_network_name')
+            ->toArray();
+
+        foreach ($connectedNetworks as $networkName) {
+            // Keep default network and proxy networks
+            if ($networkName === $defaultNetwork || in_array($networkName, $proxyNetworkNames)) {
+                continue;
+            }
+
+            // Skip Docker predefined networks
+            if (in_array($networkName, ['bridge', 'host', 'none'])) {
+                continue;
+            }
+
+            $disconnected = static::disconnectContainer($server, $networkName, 'coolify-proxy');
+            $results[$networkName] = $disconnected;
+        }
+
+        Log::info('NetworkService: Disconnected proxy from non-proxy networks', [
+            'server' => $server->name,
+            'disconnected' => array_keys(array_filter($results)),
+        ]);
+
+        return $results;
+    }
+
+    /**
+     * Migrate a server to proxy isolation.
+     *
+     * Steps:
+     * 1. Create/ensure the proxy network exists
+     * 2. Connect the proxy container to it
+     * 3. Connect all FQDN-bearing resource containers to the proxy network
+     * 4. Return migration status
+     *
+     * Does NOT disconnect from old networks — that's a separate step
+     * after all resources have been redeployed with traefik.docker.network labels.
+     */
+    public static function migrateToProxyIsolation(Server $server): array
+    {
+        $results = [
+            'proxy_network' => null,
+            'proxy_connected' => false,
+            'resources_migrated' => 0,
+            'resources_failed' => 0,
+            'errors' => [],
+        ];
+
+        try {
+            // 1. Ensure proxy network exists
+            $proxyNetwork = static::ensureProxyNetwork($server);
+            $results['proxy_network'] = $proxyNetwork->docker_network_name;
+
+            // 2. Connect proxy container
+            $results['proxy_connected'] = static::connectProxyContainer($server);
+
+            // 3. Find all FQDN-bearing resources on this server and connect them
+            $applications = Application::whereHas('destination', function ($q) use ($server) {
+                $q->where('server_id', $server->id);
+            })->whereNotNull('fqdn')->where('fqdn', '!=', '')->get();
+
+            foreach ($applications as $app) {
+                try {
+                    $containerNames = static::getContainerNames($app);
+                    foreach ($containerNames as $containerName) {
+                        static::connectContainer($server, $proxyNetwork->docker_network_name, $containerName);
+                    }
+
+                    ResourceNetwork::updateOrCreate(
+                        [
+                            'resource_type' => get_class($app),
+                            'resource_id' => $app->id,
+                            'managed_network_id' => $proxyNetwork->id,
+                        ],
+                        [
+                            'is_connected' => true,
+                            'is_auto_attached' => true,
+                            'connected_at' => now(),
+                        ]
+                    );
+
+                    $results['resources_migrated']++;
+                } catch (\Throwable $e) {
+                    $results['resources_failed']++;
+                    $results['errors'][] = "Application {$app->uuid}: {$e->getMessage()}";
+                }
+            }
+
+            // Also handle Services with FQDNs
+            $services = Service::where('server_id', $server->id)->get();
+            foreach ($services as $service) {
+                if (! static::resourceHasFqdn($service)) {
+                    continue;
+                }
+
+                try {
+                    $containerNames = static::getContainerNames($service);
+                    foreach ($containerNames as $containerName) {
+                        static::connectContainer($server, $proxyNetwork->docker_network_name, $containerName);
+                    }
+
+                    ResourceNetwork::updateOrCreate(
+                        [
+                            'resource_type' => get_class($service),
+                            'resource_id' => $service->id,
+                            'managed_network_id' => $proxyNetwork->id,
+                        ],
+                        [
+                            'is_connected' => true,
+                            'is_auto_attached' => true,
+                            'connected_at' => now(),
+                        ]
+                    );
+
+                    $results['resources_migrated']++;
+                } catch (\Throwable $e) {
+                    $results['resources_failed']++;
+                    $results['errors'][] = "Service {$service->uuid}: {$e->getMessage()}";
+                }
+            }
+
+            Log::info('NetworkService: Proxy isolation migration complete', $results);
+        } catch (\Throwable $e) {
+            $results['errors'][] = $e->getMessage();
+            Log::error('NetworkService: Proxy isolation migration failed', [
+                'server' => $server->name,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $results;
+    }
+
+    /**
      * Generate the Docker network name for a given scope and identifier.
      *
      * Format: {prefix}-{scope}-{identifier}

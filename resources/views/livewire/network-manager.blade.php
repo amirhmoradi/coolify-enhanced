@@ -17,6 +17,51 @@
         </x-forms.button>
     </div>
 
+    {{-- Proxy Isolation Panel --}}
+    @if ($proxyIsolationEnabled)
+        <div class="p-4 mb-4 bg-coolgray-100 rounded border border-purple-500/30">
+            <div class="flex items-center justify-between pb-2">
+                <div>
+                    <h3 class="font-bold text-purple-400">Proxy Network Isolation</h3>
+                    <div class="text-xs text-neutral-400 mt-1">
+                        Dedicated proxy network ensures the reverse proxy only accesses resources with FQDNs.
+                    </div>
+                </div>
+                @if ($proxyNetwork)
+                    <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
+                @else
+                    <span class="px-2 py-0.5 text-xs rounded bg-warning/20 text-warning">Not Migrated</span>
+                @endif
+            </div>
+
+            @if ($proxyNetwork)
+                <div class="text-sm text-neutral-300 mt-2">
+                    <span class="font-mono text-xs">{{ $proxyNetwork->docker_network_name }}</span>
+                    <span class="text-neutral-500 ml-2">{{ $proxyNetwork->connectedContainerCount() }} connected</span>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <x-forms.button wire:click="migrateProxyIsolation">
+                        Re-run Migration
+                    </x-forms.button>
+                    <x-forms.button isWarning
+                        wire:click="cleanupProxyNetworks"
+                        wire:confirm="This will disconnect the proxy from all non-proxy networks. Only proceed if all resources have been redeployed. Continue?">
+                        Cleanup Old Networks
+                    </x-forms.button>
+                </div>
+            @else
+                <div class="mt-3">
+                    <x-forms.button wire:click="migrateProxyIsolation">
+                        Run Proxy Migration
+                    </x-forms.button>
+                    <div class="text-xs text-neutral-500 mt-1">
+                        Creates the proxy network, connects the proxy container, and connects all FQDN resources.
+                    </div>
+                </div>
+            @endif
+        </div>
+    @endif
+
     @if ($activeTab === 'managed')
         {{-- Create shared network form --}}
         <div class="pb-4">
