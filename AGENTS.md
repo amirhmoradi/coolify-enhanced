@@ -696,3 +696,67 @@ The Coolify source code is cloned at `docs/coolify-source/` (gitignored). Key re
 | 1.x | v4.x | 8.2+ |
 
 **Note:** Coolify v5 may include similar built-in features. A migration guide will be provided when v5 is released.
+
+## MCP Server
+
+### Overview
+
+The `mcp-server/` directory contains a standalone TypeScript MCP (Model Context Protocol) server that wraps Coolify's REST API and coolify-enhanced's API endpoints. It enables AI assistants (Claude Desktop, Cursor, VS Code) to manage infrastructure via natural language.
+
+### Architecture
+
+- **Language**: TypeScript (ES2022, NodeNext modules)
+- **SDK**: `@modelcontextprotocol/sdk` v1.26+
+- **Transport**: stdio (StdioServerTransport) — standard for MCP CLI servers
+- **API Client**: `CoolifyClient` in `src/lib/coolify-client.ts` — single HTTP client for both native and enhanced endpoints
+- **Tool Registration**: 14 modules in `src/tools/` register ~99 tools via `server.tool()` with Zod schemas
+
+### Tool Module Layout
+
+| Module | Tools | Description |
+|--------|-------|-------------|
+| `servers.ts` | 8 | Server CRUD, resources, domains, validate |
+| `projects.ts` | 9 | Project + environment CRUD |
+| `applications.ts` | 10 | App CRUD, start/stop/restart, logs, deploy |
+| `databases.ts` | 8 | Database CRUD, start/stop/restart |
+| `services.ts` | 8 | Service CRUD, start/stop/restart |
+| `deployments.ts` | 4 | Deployment list, details, cancel, app history |
+| `environment-variables.ts` | 10 | App + service env var CRUD, bulk update |
+| `database-backups.ts` | 5 | DB backup config + executions |
+| `security.ts` | 7 | Private keys, teams |
+| `system.ts` | 3 | Version, health, resources |
+| `permissions.ts` | 5 | [Enhanced] Project access management |
+| `resource-backups.ts` | 5 | [Enhanced] Resource backup schedules |
+| `templates.ts` | 7 | [Enhanced] Custom template sources |
+| `networks.ts` | 10 | [Enhanced] Network management |
+
+### Key Implementation Patterns
+
+1. **Every tool handler wraps calls in try/catch** and returns `{ isError: true }` on failure
+2. **Tool annotations are flat** — `{ readOnlyHint: true, destructiveHint: false, ... }` (NOT nested under `annotations:`)
+3. **Enhanced tools are conditionally registered** — `createMcpServer()` checks `enhanced` boolean
+4. **Feature detection** — `client.isEnhanced()` probes `GET /api/v1/resource-backups`; 200/401/403 = enhanced, 404 = standard
+5. **Logging uses stderr** — `console.error()` for all logging; stdout is reserved for MCP protocol
+6. **Retry with exponential backoff** — `requestWithRetry()` retries on 429/5xx up to 3 times
+
+### Development
+
+```bash
+cd mcp-server
+npm install
+npm run build    # TypeScript compilation
+npm run dev      # Watch mode
+npm start        # Run the server
+
+# Environment variables required:
+# COOLIFY_BASE_URL=https://coolify.example.com
+# COOLIFY_ACCESS_TOKEN=your-token
+# COOLIFY_ENHANCED=true  (optional — auto-detected)
+```
+
+### Pitfalls
+
+- **Don't use `console.log()`** — stdout is the MCP protocol channel. Use `console.error()` for logging
+- **Annotations are flat** — `server.tool(name, desc, schema, { readOnlyHint: true }, callback)` — the 4th arg is `ToolAnnotations`, not `{ annotations: ToolAnnotations }`
+- **Health endpoint path** — `/health` is NOT under `/api/v1`. The client uses a relative path `/../health` to escape the prefix
+- **Feature detection failure** — If the enhanced API probe throws a network error (not 404), the server defaults to core-only mode rather than crashing

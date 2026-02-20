@@ -23,8 +23,9 @@ This is a Laravel package that extends Coolify v4 with three main features:
 4. **Custom Template Sources** — Add external GitHub repositories as sources for docker-compose service templates, extending Coolify's one-click service list
 5. **Enhanced Database Classification** — Expanded database image detection list and `coolify.database` label/`# type: database` comment convention for explicit service classification
 6. **Network Management** — Per-environment Docker network isolation, shared networks, dedicated proxy network, server-level management UI, and per-resource network assignment
+7. **MCP Server** — Model Context Protocol server enabling AI assistants (Claude Desktop, Cursor, VS Code) to manage Coolify infrastructure via natural language
 
-It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image.
+It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image. The MCP server is a standalone TypeScript/Node.js package in `mcp-server/`.
 
 ## Critical Architecture Knowledge
 
@@ -176,6 +177,27 @@ Provides per-environment Docker network isolation (Phase 1), proxy network isola
 - **Proxy overlay for Swarm**: `proxy.php` overlay creates proxy networks with `--driver overlay --attachable` for Swarm servers, with optional `--opt encrypted`.
 - **UI Swarm indicators**: Network manager shows "Swarm Manager/Worker" badge, overlay driver badge, and encrypted overlay indicator. Create network form includes "Encrypted Overlay" checkbox for Swarm servers.
 
+### MCP Server Architecture
+
+A standalone TypeScript/Node.js MCP server in `mcp-server/` that wraps Coolify's REST API and coolify-enhanced's API endpoints, enabling AI assistants to manage infrastructure through natural language.
+
+- **Transport**: stdio (JSON-RPC) via `@modelcontextprotocol/sdk` — standard for MCP CLI servers
+- **API Client**: `CoolifyClient` class handles both native Coolify API (`/api/v1/*`) and coolify-enhanced API endpoints using Bearer token authentication
+- **Tool registration**: 14 tool modules register ~99 tools on the MCP server organized by category (servers, projects, applications, databases, services, deployments, env vars, backups, security, system, permissions, resource backups, templates, networks)
+- **Feature detection**: Enhanced tools (permissions, resource backups, templates, networks) are conditionally registered based on `COOLIFY_ENHANCED=true` env var or auto-detected via a probe to the enhanced API
+- **Tool annotations**: Every tool includes `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` to help AI clients make safety decisions
+- **Retry logic**: Exponential backoff (2^attempt seconds, max 3 retries) for transient failures (429, 5xx)
+- **Published as**: `@amirhmoradi/coolify-enhanced-mcp` npm package, runnable via `npx`
+- **Zero overlay files**: The MCP server is entirely standalone — no Coolify file modifications needed
+
+```
+AI Client (Claude Desktop, Cursor, etc.)
+    ↕ stdio (JSON-RPC)
+MCP Server (@amirhmoradi/coolify-enhanced-mcp)
+    ↕ HTTPS (REST API)
+Coolify Instance (with optional coolify-enhanced addon)
+```
+
 ## Quick Reference
 
 ### Package Structure
@@ -291,9 +313,40 @@ coolify-enhanced/
 │   │       ├── PRD.md                         # Product Requirements Document
 │   │       ├── plan.md                        # Technical implementation plan
 │   │       └── README.md                      # Feature overview
+│   │   └── mcp-server/                        # MCP server feature documentation
+│   │       ├── PRD.md                         # Product Requirements Document
+│   │       ├── plan.md                        # Technical implementation plan
+│   │       └── README.md                      # Feature overview
 │   ├── examples/
 │   │   └── whoami.yaml                        # Example custom template
 │   └── coolify-source/                        # Cloned Coolify source (gitignored)
+├── mcp-server/                                 # MCP server (TypeScript/Node.js)
+│   ├── package.json                            # npm package config
+│   ├── tsconfig.json                           # TypeScript config
+│   ├── README.md                               # MCP server documentation
+│   ├── bin/cli.ts                              # CLI entry point
+│   ├── src/
+│   │   ├── index.ts                            # Main entry point
+│   │   ├── lib/
+│   │   │   ├── coolify-client.ts               # HTTP API client
+│   │   │   ├── mcp-server.ts                  # Server assembly + tool registration
+│   │   │   └── types.ts                       # TypeScript type definitions
+│   │   └── tools/
+│   │       ├── servers.ts                      # Server management tools (8)
+│   │       ├── projects.ts                     # Project & environment tools (9)
+│   │       ├── applications.ts                # Application tools (10)
+│   │       ├── databases.ts                   # Database tools (8)
+│   │       ├── services.ts                    # Service tools (8)
+│   │       ├── deployments.ts                 # Deployment tools (4)
+│   │       ├── environment-variables.ts       # Env var tools (10)
+│   │       ├── database-backups.ts            # DB backup tools (5)
+│   │       ├── security.ts                    # Private keys + teams tools (7)
+│   │       ├── system.ts                      # Version, health, resources (3)
+│   │       ├── permissions.ts                 # [Enhanced] Permission tools (5)
+│   │       ├── resource-backups.ts            # [Enhanced] Resource backup tools (5)
+│   │       ├── templates.ts                  # [Enhanced] Custom template tools (7)
+│   │       └── networks.ts                   # [Enhanced] Network management tools (10)
+│   └── __tests__/                              # Test files
 ├── install.sh                                  # Automated installer
 └── uninstall.sh                                # Automated uninstaller
 ```
@@ -354,6 +407,12 @@ coolify-enhanced/
 | `docker/docker-compose.custom.yml` | Compose override template |
 | `install.sh` | Setup script (menu + CLI args) |
 | `uninstall.sh` | Standalone uninstall script |
+| `mcp-server/src/index.ts` | MCP server entry point |
+| `mcp-server/src/lib/coolify-client.ts` | HTTP API client for Coolify + enhanced endpoints |
+| `mcp-server/src/lib/mcp-server.ts` | MCP server assembly with conditional tool registration |
+| `mcp-server/src/lib/types.ts` | TypeScript type definitions for all API types |
+| `mcp-server/src/tools/*.ts` | 14 tool modules (99 tools total) |
+| `mcp-server/package.json` | npm package: @amirhmoradi/coolify-enhanced-mcp |
 
 ### Development Commands
 
@@ -383,6 +442,13 @@ sudo bash uninstall.sh
 
 # Update Coolify reference source
 git -C docs/coolify-source pull
+
+# MCP Server development
+cd mcp-server && npm install && npm run build
+cd mcp-server && npm run dev  # Watch mode
+
+# Run MCP server locally
+COOLIFY_BASE_URL=https://coolify.example.com COOLIFY_ACCESS_TOKEN=token node mcp-server/dist/src/index.js
 ```
 
 ### Permission Levels
@@ -499,6 +565,11 @@ Two approaches are used to add UI components to Coolify pages:
 71. **Overlay encryption adds IPsec overhead** — `--opt encrypted` enables IPsec encryption between Swarm nodes (~5-10% overhead). Configured via `COOLIFY_SWARM_OVERLAY_ENCRYPTION=true`. Applied during network creation, not retroactively.
 72. **Strict mode uses `coolify-overlay` for Swarm** — When disconnecting from the default network in strict mode, use `coolify-overlay` (Swarm) instead of `coolify` (standalone). `getDefaultNetworkName()` handles this.
 73. **Phase 3 adds zero new overlay files** — All Swarm support is in `NetworkService.php`, `NetworkReconcileJob.php`, and updates to existing overlays. The `proxy.php` overlay's Swarm branches were updated but no new overlays were created.
+74. **MCP server is standalone TypeScript** — Lives in `mcp-server/` directory, completely independent of the Laravel package. Does not need to run on the Coolify server — runs on the user's workstation alongside their AI client.
+75. **MCP tool annotations are flat** — The `@modelcontextprotocol/sdk` v1.26 expects `{ readOnlyHint: true }` as direct properties on the annotations parameter, NOT nested under `{ annotations: { ... } }`.
+76. **MCP enhanced feature detection** — The server probes `GET /api/v1/resource-backups` on startup. 200 or 401/403 means enhanced is available (endpoint exists). 404 means standard Coolify.
+77. **MCP server stderr for logging** — MCP servers must use `console.error()` for logging because `console.log()` / stdout is reserved for the JSON-RPC protocol communication.
+78. **MCP CoolifyClient health check path** — The health endpoint is at `/health` (not `/api/v1/health`). The client uses `/../health` relative path to escape the `/api/v1` prefix.
 
 ## Important Notes
 
@@ -518,12 +589,17 @@ Two approaches are used to add UI components to Coolify pages:
 14. **Proxy migration** - After enabling `COOLIFY_PROXY_ISOLATION=true`, run "Proxy Migration" from Server > Networks page. All FQDN resources join the proxy network; new deployments auto-join
 15. **Phase 3 adds Swarm support** - Automatic overlay networks for Swarm servers, `docker service update --network-add` for task network assignment, optional IPsec encryption via `COOLIFY_SWARM_OVERLAY_ENCRYPTION=true`
 16. **Swarm service updates cause rolling restarts** - `docker service update --network-add` triggers a rolling update of service tasks. This is a zero-downtime operation but takes ~10-30s per service
+17. **MCP server** - Standalone TypeScript MCP server in `mcp-server/`. Wraps all ~105 Coolify API endpoints + coolify-enhanced endpoints as MCP tools. Published as `@amirhmoradi/coolify-enhanced-mcp`
+18. **MCP auto-detection** - Enhanced tools are auto-registered when coolify-enhanced API is detected, or forced via `COOLIFY_ENHANCED=true` env var
+19. **MCP works with standard Coolify** - Core tools (72 tools) work with any Coolify v4 instance. Enhanced tools (27 tools) require the coolify-enhanced addon
 
 ## See Also
 
 - [AGENTS.md](AGENTS.md) - Detailed AI agent instructions
 - [docs/custom-templates.md](docs/custom-templates.md) - Custom template creation guide
 - [docs/features/](docs/features/) - Per-feature documentation (PRD, plan, README)
+- [docs/features/mcp-server/](docs/features/mcp-server/) - MCP server feature documentation
+- [mcp-server/README.md](mcp-server/README.md) - MCP server usage and tool reference
 - [docs/coolify-source/](docs/coolify-source/) - Coolify source code reference
 - [docs/architecture.md](docs/architecture.md) - Architecture details
 - [docs/api.md](docs/api.md) - API documentation

@@ -1,0 +1,47 @@
+{
+  "name": "@amirhmoradi/coolify-enhanced-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Coolify with enhanced features (permissions, backups, templates, networks)",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "bin": {
+    "coolify-enhanced-mcp": "dist/bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/src/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "coolify",
+    "paas",
+    "infrastructure",
+    "deployment",
+    "ai",
+    "claude"
+  ],
+  "author": "Amir H. Moradi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amirhmoradi/coolify-enhanced",
+    "directory": "mcp-server"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

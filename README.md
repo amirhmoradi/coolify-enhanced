@@ -105,6 +105,36 @@ All six features are **independent** — enable only what you need. When disable
 - Name collision handling — built-in templates always take precedence
 - Deployed services are independent of template sources (write-once)
 
+### MCP Server (AI Assistant Integration)
+- **99+ MCP tools** wrapping all Coolify API endpoints for AI-driven infrastructure management
+- Works with **Claude Desktop**, **Cursor**, **VS Code Copilot**, **Kiro IDE**, and any MCP-compatible client
+- **Core tools** (72) work with standard Coolify — no addon required
+- **Enhanced tools** (27) for permissions, resource backups, custom templates, and network management
+- **Auto-detection** of coolify-enhanced features — falls back gracefully to core tools
+- **Tool annotations** — read-only, destructive, and idempotent hints for AI safety
+- Install via `npx @amirhmoradi/coolify-enhanced-mcp`
+
+#### Quick Setup (Claude Desktop)
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@amirhmoradi/coolify-enhanced-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://coolify.example.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+See [mcp-server/README.md](mcp-server/README.md) for full documentation and the complete tool reference.
+
 ---
 
 ## Screenshots
