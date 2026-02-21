@@ -24,8 +24,10 @@ Coolify v4 is an excellent self-hosted PaaS, but ships with a few limitations fo
 | **Service templates** | Limited to Coolify's built-in 200+ templates | Add unlimited custom templates from any GitHub repository |
 | **Database classification** | Many databases (Memgraph, Milvus, Qdrant, etc.) misclassified as applications | 50+ additional database images recognized; explicit label and comment overrides |
 | **Network isolation** | All containers share a single flat Docker network | Per-environment bridge networks, dedicated proxy network, cross-env shared networks, Docker Swarm overlay support |
+| **MCP Server (AI Assistant Integration)** | None | 99+ MCP tools covering all Coolify (and Coolify Enhanced) API endpoints |
 
-All six features are **independent** — enable only what you need. When disabled, Coolify behaves exactly as stock.
+
+All features are **independent** — enable only what you need. When disabled, Coolify behaves exactly as stock.
 
 ---
 
@@ -41,6 +43,7 @@ All six features are **independent** — enable only what you need. When disable
   - [Custom Template Sources](#4-custom-template-sources)
   - [Enhanced Database Classification](#5-enhanced-database-classification)
   - [Network Management](#6-network-management)
+  - [MCP Server](#7-mcp-server)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
@@ -198,6 +201,20 @@ See [mcp-server/README.md](mcp-server/README.md) for full documentation and the 
 
 
 *Schedule full `/data/coolify` directory backups (excluding backup directories) from the Settings page.*
+
+### Network Management
+
+<!-- SCREENSHOT: Network Management -->
+#### Server level Network Management
+<img width="2544" height="1814" alt="coolify-server-network-management" src="https://github.com/user-attachments/assets/e2194a98-b49f-4931-8618-cf7816e5a0cf" />
+
+#### Project level Network Settings
+
+<img width="2556" height="1806" alt="coolify-project-level-networks" src="https://github.com/user-attachments/assets/365fb628-4a35-4e8a-ad6e-53ac7cabd8b5" />
+
+### MCP Server
+
+
 
 ---
 
@@ -723,6 +740,10 @@ This post-deployment hook approach avoids overlaying Coolify's 4,130-line `Appli
 3. This creates the proxy network, connects the proxy container, and connects all FQDN resources
 4. Redeploy all resources (so they get `traefik.docker.network` labels)
 5. Optionally click **Cleanup Old Networks** to disconnect the proxy from non-proxy networks
+
+### 7. MCP Server
+
+See [mcp-server/README.md](mcp-server/README.md) for detailed information.
 
 ---
 
