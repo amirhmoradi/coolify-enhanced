@@ -1,5 +1,7 @@
 # MCP Server — Technical Implementation Plan
 
+> **Status: IMPLEMENTED** — The MCP server has been fully built and compiles cleanly. The plan below documents the original design; see "Deviations from Plan" at the bottom for what changed during implementation.
+
 ## Overview
 
 Build a TypeScript MCP server that wraps Coolify's native REST API and coolify-enhanced's additional API endpoints, enabling AI assistants to manage infrastructure through natural language.
@@ -28,6 +30,7 @@ mcp-server/
 │       ├── services.ts                # Service management tools
 │       ├── deployments.ts             # Deployment management tools
 │       ├── environment-variables.ts   # Env var management tools
+│       ├── database-backups.ts        # Database backup tools
 │       ├── security.ts                # Private keys & teams tools
 │       ├── system.ts                  # Version, health, resources tools
 │       ├── permissions.ts             # Enhanced: permission management tools
@@ -489,3 +492,55 @@ async isEnhanced(): Promise<boolean> {
 1. **Unit tests** for CoolifyClient (mock HTTP responses)
 2. **Tool registration tests** (verify all tools are registered with correct schemas)
 3. **Integration tests** (optional, against a live Coolify instance with `COOLIFY_TEST_URL`)
+
+---
+
+## Deviations from Plan
+
+The following changes were made during implementation:
+
+### 1. Tool Module Addition: `database-backups.ts`
+
+The plan listed database backup tools under `security.ts`. During implementation, database backups were split into a dedicated `database-backups.ts` module (5 tools), bringing the total to **14 tool modules** instead of 13.
+
+### 2. Tool Count Corrections
+
+| Module | Planned | Actual | Notes |
+|--------|---------|--------|-------|
+| Projects | 8 | 9 | Added `list_app_deployments` was moved to deployments |
+| Deployments | 5 | 4 | `list_app_deployments` counted in the actual 4 |
+| Database Backups | (in security) | 5 | Split to own module |
+
+Final total: **99 tools** (72 core + 27 enhanced).
+
+### 3. Composite / Workflow Tools Deferred
+
+The PRD planned composite tools (`get_infrastructure_overview`, `deploy_and_wait`, `setup_project_with_access`, `backup_all_resources`). These were deferred — the 99 individual tools provide full API coverage and AI clients can chain them naturally.
+
+### 4. MCP Resources and Prompts Deferred
+
+MCP resource URIs (`coolify://servers`, etc.) and prompt templates (`deploy-application`, etc.) were deferred. Tools provide equivalent access.
+
+### 5. Tool Annotations are Flat
+
+The plan showed annotations nested under `{ annotations: { ... } }`. The actual MCP SDK v1.26 expects flat annotations as the 4th parameter to `server.tool()`:
+
+```typescript
+// Plan (incorrect):
+{ annotations: { readOnlyHint: true, ... } }
+
+// Actual (correct):
+{ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+```
+
+### 6. `createMcpServer` Takes Options Object
+
+The plan showed `createMcpServer(client, enhanced)` with positional args. Implementation uses an options object: `createMcpServer({ client, enhanced })`.
+
+### 7. Feature Detection Uses Resource Backups Endpoint
+
+The plan mentioned a `/health` probe for feature detection. Implementation probes `GET /api/v1/resource-backups` instead — HTTP 200/401/403 means enhanced (endpoint exists), 404 means standard Coolify.
+
+### 8. Environment Variables
+
+`COOLIFY_MCP_LOG_LEVEL` was dropped. `COOLIFY_MCP_TIMEOUT` and `COOLIFY_MCP_RETRIES` were added for request configuration.
