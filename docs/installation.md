@@ -517,6 +517,108 @@ If you revert and later decide to use the enhanced features again:
 
 ---
 
+## MCP Server Setup (AI Assistant Integration)
+
+The Coolify Enhanced MCP Server lets AI assistants (Claude Desktop, Cursor, VS Code, Kiro IDE) manage your Coolify infrastructure through natural language. It runs on your **local workstation** — not on the Coolify server.
+
+### Prerequisites
+
+- Node.js 18+
+- A Coolify instance with API enabled
+- An API token (create in Coolify: **Settings > Keys & Tokens > API tokens**)
+
+### Quick Setup
+
+No installation needed — run directly via `npx`:
+
+```bash
+COOLIFY_BASE_URL=https://coolify.example.com \
+COOLIFY_ACCESS_TOKEN=your-token \
+npx @amirhmoradi/coolify-enhanced-mcp
+```
+
+### Configure Your AI Client
+
+#### Claude Desktop
+
+Add to your `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`, Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@amirhmoradi/coolify-enhanced-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://coolify.example.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+#### Cursor / VS Code / Kiro IDE
+
+Add to your workspace or global MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@amirhmoradi/coolify-enhanced-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://coolify.example.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `COOLIFY_BASE_URL` | Yes | — | Coolify instance URL (e.g., `https://coolify.example.com`) |
+| `COOLIFY_ACCESS_TOKEN` | Yes | — | API token with read/write/deploy scopes |
+| `COOLIFY_ENHANCED` | No | auto-detect | Set `true` to force-enable enhanced tools |
+| `COOLIFY_MCP_TIMEOUT` | No | `30000` | API request timeout (milliseconds) |
+| `COOLIFY_MCP_RETRIES` | No | `3` | Retry attempts for failed requests |
+
+### Feature Auto-Detection
+
+The MCP server automatically detects whether your Coolify instance has the coolify-enhanced addon installed. If detected, 27 additional tools for permissions, resource backups, custom templates, and network management become available alongside the 72 core tools.
+
+You can override auto-detection by setting `COOLIFY_ENHANCED=true`.
+
+### Verify It Works
+
+After configuring your AI client, try asking:
+
+- "List all my Coolify servers"
+- "Show me the projects in my Coolify instance"
+- "What applications are running?"
+
+The AI should use the MCP tools to query your Coolify instance and return results.
+
+### MCP Server Development (Local)
+
+If you want to develop or modify the MCP server:
+
+```bash
+cd mcp-server
+npm install
+npm run build    # Compile TypeScript
+npm run dev      # Watch mode (recompile on change)
+npm start        # Run the compiled server
+```
+
+For the full tool reference, see [mcp-server/README.md](../mcp-server/README.md).
+
+---
+
 ## Support
 
 - **Issues:** https://github.com/amirhmoradi/coolify-enhanced/issues

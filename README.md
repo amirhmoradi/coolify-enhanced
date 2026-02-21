@@ -1011,6 +1011,7 @@ Each feature has detailed documentation under `docs/features/<feature-name>/`:
 |---------|--------|----------|
 | Enhanced Database Classification | [`docs/features/enhanced-database-classification/`](docs/features/enhanced-database-classification/) | PRD, implementation plan, feature overview |
 | Network Management | [`docs/features/network-management/`](docs/features/network-management/) | PRD, implementation plan, feature overview |
+| MCP Server | [`docs/features/mcp-server/`](docs/features/mcp-server/) | PRD, implementation plan, feature overview |
 
 Each feature folder contains:
 - **PRD.md** — Product Requirements Document (problem, goals, design, rationale, risks)

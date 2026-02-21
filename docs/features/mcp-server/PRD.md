@@ -166,42 +166,15 @@ These wrap Coolify's built-in API endpoints. Inspired by `dazeb/coolify-mcp-enha
 | `attach_resource_network` | Attach resource to network | `POST /resources/{type}/{uuid}/networks` | — |
 | `detach_resource_network` | Detach resource from network | `DELETE /resources/{type}/{uuid}/networks/{net_uuid}` | — |
 
-#### Category 6: Composite / Workflow Tools
+### Implementation Notes
 
-Higher-level tools that combine multiple API calls for common operations:
+The PRD originally planned composite/workflow tools (e.g., `get_infrastructure_overview`, `deploy_and_wait`), MCP resource URIs, and MCP prompt templates. These were deferred from the initial implementation:
 
-| Tool | Description | Calls Multiple Endpoints | Annotation |
-|------|-------------|--------------------------|------------|
-| `get_infrastructure_overview` | Full overview of all servers, projects, resources | servers + projects + resources | readOnly |
-| `deploy_and_wait` | Deploy and poll until complete | deploy + get_deployment (polling) | — |
-| `setup_project_with_access` | Create project + set permissions | create_project + grant_access | — |
-| `backup_all_resources` | Trigger backups for all resources on a server | list_resource_backups + trigger for each | — |
+- **Composite tools** — deferred; the 99 individual tools provide full coverage and AI clients can chain them naturally
+- **MCP Resources** — deferred; tools provide equivalent read-only access
+- **MCP Prompts** — deferred; AI clients have sufficient context from tool descriptions to guide users
 
-### MCP Resources
-
-In addition to tools, the server exposes MCP resources for read-only data access:
-
-| Resource URI | Description |
-|-------------|-------------|
-| `coolify://servers` | List of all servers |
-| `coolify://servers/{uuid}` | Server details |
-| `coolify://projects` | List of all projects |
-| `coolify://projects/{uuid}` | Project details |
-| `coolify://applications/{uuid}` | Application details |
-| `coolify://databases/{uuid}` | Database details |
-| `coolify://services/{uuid}` | Service details |
-
-### MCP Prompts
-
-Pre-built prompt templates for common operations:
-
-| Prompt | Description |
-|--------|-------------|
-| `deploy-application` | Guide through deploying an application |
-| `setup-database-backup` | Guide through setting up database backups |
-| `manage-permissions` | Guide through project permission management |
-| `troubleshoot-deployment` | Help diagnose deployment failures |
-| `setup-network-isolation` | Guide through network isolation setup |
+These may be added in a future version based on user feedback.
 
 ## Technical Decisions and Rationale
 
@@ -237,9 +210,32 @@ Pre-built prompt templates for common operations:
 
 ### 6. Feature Detection for Enhanced Tools
 
-**Decision:** Enhanced tools (permissions, backups, templates, networks) are registered only when `COOLIFY_ENHANCED=true` is set, or auto-detected via a `/health` probe.
+**Decision:** Enhanced tools (permissions, backups, templates, networks) are registered only when `COOLIFY_ENHANCED=true` is set, or auto-detected by probing `GET /api/v1/resource-backups`.
 
-**Rationale:** The MCP server should work with both vanilla Coolify and coolify-enhanced. Users running standard Coolify should not see tools that won't work. Auto-detection probes the enhanced API endpoint on startup.
+**Rationale:** The MCP server should work with both vanilla Coolify and coolify-enhanced. Users running standard Coolify should not see tools that won't work. Auto-detection probes the enhanced API endpoint on startup — HTTP 200/401/403 means the endpoint exists (enhanced available), while 404 means standard Coolify.
+
+### 7. Tool Count Summary (As Implemented)
+
+The final implementation delivers **99 tools** across 14 modules:
+
+| Module | Tools | Description |
+|--------|-------|-------------|
+| servers.ts | 8 | Server CRUD + resources, domains, validate |
+| projects.ts | 9 | Project CRUD + environment CRUD |
+| applications.ts | 10 | App CRUD + start/stop/restart/logs/deploy |
+| databases.ts | 8 | Database CRUD + start/stop/restart |
+| services.ts | 8 | Service CRUD + start/stop/restart |
+| deployments.ts | 4 | List, get, cancel, app deployment history |
+| environment-variables.ts | 10 | App + service env var CRUD + bulk update |
+| database-backups.ts | 5 | Backup config CRUD + list executions |
+| security.ts | 7 | Private keys (4) + teams (3) |
+| system.ts | 3 | Version, health, resources |
+| permissions.ts | 5 | [Enhanced] Project access management |
+| resource-backups.ts | 5 | [Enhanced] Resource backup schedules |
+| templates.ts | 7 | [Enhanced] Custom template sources |
+| networks.ts | 10 | [Enhanced] Network management |
+
+**Core tools: 72** (work with any Coolify v4). **Enhanced tools: 27** (require coolify-enhanced addon).
 
 ## User Experience
 
@@ -277,8 +273,9 @@ npx @amirhmoradi/coolify-enhanced-mcp
 |----------|----------|---------|-------------|
 | `COOLIFY_BASE_URL` | Yes | — | Coolify instance URL (e.g., `https://coolify.example.com`) |
 | `COOLIFY_ACCESS_TOKEN` | Yes | — | Coolify API token with appropriate scopes |
-| `COOLIFY_ENHANCED` | No | `false` | Enable enhanced features (permissions, backups, templates, networks) |
-| `COOLIFY_MCP_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `COOLIFY_ENHANCED` | No | auto-detect | Force enable enhanced features (`true`) or auto-detect |
+| `COOLIFY_MCP_TIMEOUT` | No | `30000` | API request timeout in milliseconds |
+| `COOLIFY_MCP_RETRIES` | No | `3` | Retry attempts for transient failures |
 
 ## Files Modified/Created
 

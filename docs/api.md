@@ -1,6 +1,6 @@
 # API Documentation
 
-This document describes the REST API endpoints provided by the Coolify Granular Permissions package.
+This document describes the REST API endpoints provided by the Coolify Enhanced package, and the MCP (Model Context Protocol) server for AI-assisted infrastructure management.
 
 ## Authentication
 
@@ -14,9 +14,13 @@ curl -H "Authorization: Bearer YOUR_API_TOKEN" \
 
 ## Base URL
 
-All endpoints are prefixed with `/api/v1/permissions/`
+All endpoints are prefixed with `/api/v1/`
 
-## Endpoints
+---
+
+## Permissions API
+
+Base path: `/api/v1/permissions/`
 
 ### List Project Permissions
 
@@ -134,9 +138,9 @@ Grant a user access to a project.
 
 | Level | View | Deploy | Manage | Delete |
 |-------|------|--------|--------|--------|
-| `view_only` | ✓ | ✗ | ✗ | ✗ |
-| `deploy` | ✓ | ✓ | ✗ | ✗ |
-| `full_access` | ✓ | ✓ | ✓ | ✓ |
+| `view_only` | Yes | — | — | — |
+| `deploy` | Yes | Yes | — | — |
+| `full_access` | Yes | Yes | Yes | Yes |
 
 **Response (201 Created):**
 ```json
@@ -357,6 +361,453 @@ Remove all user access from a project.
 
 ---
 
+## Template Sources API
+
+Base path: `/api/v1/template-sources/`
+
+### List Template Sources
+
+List all custom template sources.
+
+**Endpoint:** `GET /api/v1/template-sources`
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "uuid": "abc123",
+      "name": "My Templates",
+      "slug": "my-templates",
+      "repository_url": "https://github.com/myorg/coolify-templates",
+      "branch": "main",
+      "folder_path": "templates/compose",
+      "is_enabled": true,
+      "sync_status": "synced",
+      "last_synced_at": "2024-06-15T10:30:00Z",
+      "sync_error": null,
+      "template_count": 12,
+      "created_at": "2024-06-01T08:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Create Template Source
+
+Add a new GitHub repository as a template source.
+
+**Endpoint:** `POST /api/v1/template-sources`
+
+**Request Body:**
+```json
+{
+  "name": "My Templates",
+  "repository_url": "https://github.com/myorg/coolify-templates",
+  "branch": "main",
+  "folder_path": "templates/compose",
+  "auth_token": "ghp_xxxx"
+}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Human-readable source name |
+| `repository_url` | string | Yes | GitHub repository URL |
+| `branch` | string | No | Branch name (default: `main`) |
+| `folder_path` | string | No | Path within repo to YAML templates (default: root) |
+| `auth_token` | string | No | GitHub PAT for private repositories |
+
+**Response (201 Created):**
+```json
+{
+  "message": "Template source created.",
+  "data": { "uuid": "abc123", "name": "My Templates", "..." : "..." }
+}
+```
+
+---
+
+### Get Template Source
+
+Get details for a specific template source.
+
+**Endpoint:** `GET /api/v1/template-sources/{uuid}`
+
+**Response:**
+```json
+{
+  "uuid": "abc123",
+  "name": "My Templates",
+  "repository_url": "https://github.com/myorg/coolify-templates",
+  "branch": "main",
+  "folder_path": "templates/compose",
+  "is_enabled": true,
+  "sync_status": "synced",
+  "last_synced_at": "2024-06-15T10:30:00Z",
+  "templates": [
+    { "name": "whoami", "slogan": "A simple HTTP service", "tags": "testing,debug" }
+  ]
+}
+```
+
+---
+
+### Update Template Source
+
+Update a template source's settings.
+
+**Endpoint:** `PUT /api/v1/template-sources/{uuid}`
+
+**Request Body:**
+```json
+{
+  "name": "Updated Name",
+  "branch": "develop",
+  "is_enabled": false
+}
+```
+
+---
+
+### Delete Template Source
+
+Delete a custom template source.
+
+**Endpoint:** `DELETE /api/v1/template-sources/{uuid}`
+
+**Response:**
+```json
+{
+  "message": "Template source deleted."
+}
+```
+
+> Deleting a source has zero impact on services already deployed from its templates.
+
+---
+
+### Sync Template Source
+
+Trigger a sync for a specific template source.
+
+**Endpoint:** `POST /api/v1/template-sources/{uuid}/sync`
+
+**Response:**
+```json
+{
+  "message": "Sync job dispatched."
+}
+```
+
+---
+
+### Sync All Template Sources
+
+Trigger a sync for all enabled template sources.
+
+**Endpoint:** `POST /api/v1/template-sources/sync-all`
+
+**Response:**
+```json
+{
+  "message": "Sync jobs dispatched for 3 sources."
+}
+```
+
+---
+
+## Resource Backups API
+
+Base path: `/api/v1/resource-backups/`
+
+### List Resource Backup Schedules
+
+List all resource backup schedules.
+
+**Endpoint:** `GET /api/v1/resource-backups`
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `resource_type` | string | Filter by type: `application`, `service`, `database` |
+| `resource_id` | integer | Filter by resource ID |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "resource_type": "App\\Models\\Application",
+      "resource_id": 42,
+      "backup_type": "full",
+      "frequency": "0 2 * * *",
+      "s3_storage_id": 1,
+      "enabled": true,
+      "keep_locally": true,
+      "number_of_backups_locally": 5,
+      "created_at": "2024-06-01T08:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Create Resource Backup Schedule
+
+Create a new backup schedule for a resource.
+
+**Endpoint:** `POST /api/v1/resource-backups`
+
+**Request Body:**
+```json
+{
+  "resource_type": "application",
+  "resource_id": 42,
+  "backup_type": "full",
+  "frequency": "0 2 * * *",
+  "s3_storage_id": 1,
+  "enabled": true,
+  "keep_locally": true,
+  "number_of_backups_locally": 5
+}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `resource_type` | string | Yes | `application`, `service`, `database`, or `coolify_instance` |
+| `resource_id` | integer | Yes* | Resource ID (*not needed for `coolify_instance`) |
+| `backup_type` | string | Yes | `volume`, `configuration`, `full`, or `coolify_instance` |
+| `frequency` | string | Yes | Cron expression |
+| `s3_storage_id` | integer | No | S3 storage destination for upload |
+| `enabled` | boolean | No | Enable/disable (default: `true`) |
+| `keep_locally` | boolean | No | Keep local copy (default: `true`) |
+| `number_of_backups_locally` | integer | No | Local retention count |
+
+**Response (201 Created):**
+```json
+{
+  "message": "Resource backup schedule created.",
+  "data": { "id": 1, "..." : "..." }
+}
+```
+
+---
+
+### Get Resource Backup Schedule
+
+Get schedule details and recent executions.
+
+**Endpoint:** `GET /api/v1/resource-backups/{id}`
+
+**Response:**
+```json
+{
+  "id": 1,
+  "resource_type": "App\\Models\\Application",
+  "resource_id": 42,
+  "backup_type": "full",
+  "frequency": "0 2 * * *",
+  "enabled": true,
+  "executions": [
+    {
+      "id": 10,
+      "status": "success",
+      "filename": "backup-2024-06-15.tar.gz",
+      "size": 1048576,
+      "is_encrypted": true,
+      "created_at": "2024-06-15T02:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Update Resource Backup Schedule
+
+**Endpoint:** `PUT /api/v1/resource-backups/{id}`
+
+**Request Body:**
+```json
+{
+  "frequency": "0 3 * * *",
+  "enabled": false
+}
+```
+
+---
+
+### Delete Resource Backup Schedule
+
+**Endpoint:** `DELETE /api/v1/resource-backups/{id}`
+
+**Response:**
+```json
+{
+  "message": "Resource backup schedule deleted."
+}
+```
+
+---
+
+## Network Management API
+
+Base path: `/api/v1/networks/`
+
+### List Server Networks
+
+List all managed networks for a server.
+
+**Endpoint:** `GET /api/v1/networks/{serverUuid}`
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "uuid": "net-abc123",
+      "docker_network_name": "ce-env-xyz789",
+      "scope": "environment",
+      "driver": "bridge",
+      "status": "active",
+      "server_id": 1,
+      "environment_id": 5,
+      "docker_id": "sha256:abc...",
+      "is_proxy_network": false,
+      "resource_count": 3
+    }
+  ]
+}
+```
+
+---
+
+### Create Shared Network
+
+Create a user-defined shared network on a server.
+
+**Endpoint:** `POST /api/v1/networks/{serverUuid}`
+
+**Request Body:**
+```json
+{
+  "name": "shared-backend",
+  "driver": "bridge"
+}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Network display name |
+| `driver` | string | No | `bridge` (standalone) or `overlay` (Swarm); auto-detected if omitted |
+
+**Response (201 Created):**
+```json
+{
+  "message": "Network created.",
+  "data": { "uuid": "net-abc123", "docker_network_name": "ce-shared-abc123", "..." : "..." }
+}
+```
+
+---
+
+### Get Network Details
+
+Get network details including Docker inspection data.
+
+**Endpoint:** `GET /api/v1/networks/{serverUuid}/{networkUuid}`
+
+---
+
+### Delete Network
+
+Delete a managed network from the server.
+
+**Endpoint:** `DELETE /api/v1/networks/{serverUuid}/{networkUuid}`
+
+**Response:**
+```json
+{
+  "message": "Network deleted."
+}
+```
+
+---
+
+### Sync Networks
+
+Sync managed networks from Docker (discover new networks, verify existing).
+
+**Endpoint:** `POST /api/v1/networks/{serverUuid}/sync`
+
+---
+
+### Proxy Migration
+
+Run the proxy isolation migration (creates proxy network, connects FQDN resources).
+
+**Endpoint:** `POST /api/v1/networks/{serverUuid}/proxy/migrate`
+
+---
+
+### Proxy Cleanup
+
+Disconnect the proxy from non-proxy networks after all resources are redeployed.
+
+**Endpoint:** `POST /api/v1/networks/{serverUuid}/proxy/cleanup`
+
+---
+
+### List Resource Networks
+
+List networks attached to a specific resource.
+
+**Endpoint:** `GET /api/v1/networks/resource/{type}/{uuid}`
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `type` | string | `application`, `service`, or `database` |
+| `uuid` | string | Resource UUID |
+
+---
+
+### Attach Resource to Network
+
+Attach a resource to a managed network.
+
+**Endpoint:** `POST /api/v1/networks/resource/{type}/{uuid}/attach`
+
+**Request Body:**
+```json
+{
+  "network_uuid": "net-abc123"
+}
+```
+
+---
+
+### Detach Resource from Network
+
+Detach a resource from a managed network.
+
+**Endpoint:** `DELETE /api/v1/networks/resource/{type}/{uuid}/{networkUuid}`
+
+---
+
 ## Error Responses
 
 ### Common Error Codes
@@ -396,15 +847,115 @@ API endpoints are subject to Coolify's default rate limiting:
 
 ---
 
-## Webhooks (Future)
+## MCP Server (AI Assistant Integration)
 
-Planned webhook events for permission changes:
+The Coolify Enhanced MCP Server wraps all the above REST API endpoints (plus Coolify's native API) as MCP tools, enabling AI assistants to manage infrastructure through natural language.
 
-| Event | Trigger |
-|-------|---------|
-| `permission.granted` | User granted project access |
-| `permission.updated` | User's permission level changed |
-| `permission.revoked` | User's access revoked |
+### What is MCP?
+
+The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is an open standard that allows AI assistants to interact with external tools and data sources. The MCP server translates natural language commands from AI clients into Coolify API calls.
+
+### Quick Setup
+
+```bash
+# Run directly via npx (no install needed)
+npx @amirhmoradi/coolify-enhanced-mcp
+```
+
+### Client Configuration
+
+#### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@amirhmoradi/coolify-enhanced-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://coolify.example.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+#### Cursor / VS Code / Kiro IDE
+
+Add to your MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@amirhmoradi/coolify-enhanced-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://coolify.example.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `COOLIFY_BASE_URL` | Yes | — | Coolify instance URL |
+| `COOLIFY_ACCESS_TOKEN` | Yes | — | API token (create in Coolify: Settings > Keys & Tokens) |
+| `COOLIFY_ENHANCED` | No | `false` | Force enable enhanced tools (auto-detected if omitted) |
+| `COOLIFY_MCP_TIMEOUT` | No | `30000` | API request timeout in milliseconds |
+| `COOLIFY_MCP_RETRIES` | No | `3` | Retry attempts for transient failures |
+
+### Available MCP Tools
+
+The MCP server provides **99 tools** organized into 14 categories:
+
+| Category | Tools | Source |
+|----------|-------|--------|
+| Servers | 8 | Coolify native API |
+| Projects & Environments | 9 | Coolify native API |
+| Applications | 10 | Coolify native API |
+| Databases | 8 | Coolify native API |
+| Services | 8 | Coolify native API |
+| Deployments | 4 | Coolify native API |
+| Environment Variables | 10 | Coolify native API |
+| Database Backups | 5 | Coolify native API |
+| Security & Teams | 7 | Coolify native API |
+| System | 3 | Coolify native API |
+| **Permissions** | **5** | **coolify-enhanced API** |
+| **Resource Backups** | **5** | **coolify-enhanced API** |
+| **Custom Templates** | **7** | **coolify-enhanced API** |
+| **Networks** | **10** | **coolify-enhanced API** |
+
+72 core tools work with any Coolify v4 instance. 27 enhanced tools require the coolify-enhanced addon.
+
+### Tool Annotations
+
+Every tool includes semantic annotations that help AI clients make safety decisions:
+
+| Annotation | Description |
+|------------|-------------|
+| `readOnlyHint` | Tool only reads data, no side effects |
+| `destructiveHint` | Tool may delete or irreversibly modify resources |
+| `idempotentHint` | Repeated calls with same args have no additional effect |
+| `openWorldHint` | Tool interacts with external entities beyond Coolify |
+
+### Feature Auto-Detection
+
+The MCP server automatically detects whether the coolify-enhanced addon is installed by probing `GET /api/v1/resource-backups`:
+
+- **200, 401, or 403** — endpoint exists, enhanced tools are registered
+- **404** — endpoint missing, only core tools are registered
+
+You can override auto-detection by setting `COOLIFY_ENHANCED=true`.
+
+For the full MCP tool reference, see [mcp-server/README.md](../mcp-server/README.md).
 
 ---
 
@@ -488,4 +1039,22 @@ curl -H "Authorization: Bearer $API_TOKEN" \
 curl -X DELETE \
   -H "Authorization: Bearer $API_TOKEN" \
   https://coolify.example.com/api/v1/permissions/project/1
+
+# Create a template source
+curl -X POST \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My Templates","repository_url":"https://github.com/myorg/templates","branch":"main"}' \
+  https://coolify.example.com/api/v1/template-sources
+
+# Create a resource backup schedule
+curl -X POST \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"resource_type":"application","resource_id":42,"backup_type":"full","frequency":"0 2 * * *"}' \
+  https://coolify.example.com/api/v1/resource-backups
+
+# List server networks
+curl -H "Authorization: Bearer $API_TOKEN" \
+  https://coolify.example.com/api/v1/networks/server-uuid-here
 ```
