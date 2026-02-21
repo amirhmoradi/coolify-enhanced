@@ -27,6 +27,13 @@
   ],
   "author": "Amir H. Moradi",
   "license": "MIT",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/amirhmoradi/coolify-enhanced",
