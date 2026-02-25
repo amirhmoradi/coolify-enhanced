@@ -26,6 +26,7 @@ import { registerPermissionTools } from "../tools/permissions.js";
 import { registerResourceBackupTools } from "../tools/resource-backups.js";
 import { registerTemplateTools } from "../tools/templates.js";
 import { registerNetworkTools } from "../tools/networks.js";
+import { registerClusterTools } from "../tools/clusters.js";
 
 export interface CreateMcpServerOptions {
   client: CoolifyClient;
@@ -58,6 +59,7 @@ export function createMcpServer({ client, enhanced }: CreateMcpServerOptions): M
     registerResourceBackupTools(server, client);
     registerTemplateTools(server, client);
     registerNetworkTools(server, client);
+    registerClusterTools(server, client);
   }
 
   return server;

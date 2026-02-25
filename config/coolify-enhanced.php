@@ -164,4 +164,19 @@ return [
         // GitHub API timeout in seconds
         'github_timeout' => 30,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cluster Management
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for Docker Swarm cluster management and monitoring.
+    | Provides cluster dashboard, node management, service monitoring,
+    | and cluster visualization.
+    |
+    */
+    'cluster_management' => env('COOLIFY_CLUSTER_MANAGEMENT', false),
+    'cluster_sync_interval' => (int) env('COOLIFY_CLUSTER_SYNC_INTERVAL', 60),
+    'cluster_cache_ttl' => (int) env('COOLIFY_CLUSTER_CACHE_TTL', 30),
+    'cluster_event_retention_days' => (int) env('COOLIFY_CLUSTER_EVENT_RETENTION', 7),
 ];

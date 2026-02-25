@@ -53,6 +53,21 @@ import type {
   ManagedNetwork,
   CreateNetworkInput,
   AttachNetworkInput,
+  Cluster,
+  ClusterNode,
+  ClusterService,
+  ClusterTask,
+  ClusterEvent,
+  SwarmSecret,
+  SwarmConfig,
+  CreateClusterInput,
+  UpdateClusterInput,
+  NodeActionInput,
+  ScaleServiceInput,
+  CreateSecretInput,
+  CreateConfigInput,
+  ClusterEventFilter,
+  VisualizerData,
 } from "./types.js";
 
 function sleep(ms: number): Promise<void> {
@@ -608,6 +623,99 @@ export class CoolifyClient {
 
   async detachResourceNetwork(type: string, uuid: string, networkUuid: string): Promise<void> {
     return this.requestWithRetry<void>("DELETE", `/resources/${type}/${uuid}/networks/${networkUuid}`);
+  }
+
+  // ---- Clusters ----
+
+  async listClusters(): Promise<Cluster[]> {
+    return this.requestWithRetry<Cluster[]>("GET", "/clusters");
+  }
+
+  async getCluster(uuid: string): Promise<Cluster> {
+    return this.requestWithRetry<Cluster>("GET", `/clusters/${uuid}`);
+  }
+
+  async createCluster(data: CreateClusterInput): Promise<Cluster> {
+    return this.requestWithRetry<Cluster>("POST", "/clusters", { body: data });
+  }
+
+  async updateCluster(uuid: string, data: UpdateClusterInput): Promise<Cluster> {
+    return this.requestWithRetry<Cluster>("PATCH", `/clusters/${uuid}`, { body: data });
+  }
+
+  async deleteCluster(uuid: string): Promise<void> {
+    return this.requestWithRetry<void>("DELETE", `/clusters/${uuid}`);
+  }
+
+  async syncCluster(uuid: string): Promise<Cluster> {
+    return this.requestWithRetry<Cluster>("POST", `/clusters/${uuid}/sync`);
+  }
+
+  async getClusterNodes(uuid: string): Promise<ClusterNode[]> {
+    return this.requestWithRetry<ClusterNode[]>("GET", `/clusters/${uuid}/nodes`);
+  }
+
+  async clusterNodeAction(uuid: string, nodeId: string, data: NodeActionInput): Promise<unknown> {
+    return this.requestWithRetry<unknown>("POST", `/clusters/${uuid}/nodes/${nodeId}/action`, { body: data });
+  }
+
+  async removeClusterNode(uuid: string, nodeId: string, force?: boolean): Promise<unknown> {
+    const params: Record<string, string> = {};
+    if (force) params.force = "true";
+    return this.requestWithRetry<unknown>("DELETE", `/clusters/${uuid}/nodes/${nodeId}`, { params });
+  }
+
+  async getClusterServices(uuid: string): Promise<ClusterService[]> {
+    return this.requestWithRetry<ClusterService[]>("GET", `/clusters/${uuid}/services`);
+  }
+
+  async getClusterServiceTasks(uuid: string, serviceId: string): Promise<ClusterTask[]> {
+    return this.requestWithRetry<ClusterTask[]>("GET", `/clusters/${uuid}/services/${serviceId}/tasks`);
+  }
+
+  async scaleClusterService(uuid: string, serviceId: string, data: ScaleServiceInput): Promise<unknown> {
+    return this.requestWithRetry<unknown>("POST", `/clusters/${uuid}/services/${serviceId}/scale`, { body: data });
+  }
+
+  async rollbackClusterService(uuid: string, serviceId: string): Promise<unknown> {
+    return this.requestWithRetry<unknown>("POST", `/clusters/${uuid}/services/${serviceId}/rollback`);
+  }
+
+  async getClusterEvents(uuid: string, filter?: ClusterEventFilter): Promise<ClusterEvent[]> {
+    const params: Record<string, string> = {};
+    if (filter?.type) params.type = filter.type;
+    if (filter?.since != null) params.since = String(filter.since);
+    if (filter?.until != null) params.until = String(filter.until);
+    if (filter?.limit != null) params.limit = String(filter.limit);
+    return this.requestWithRetry<ClusterEvent[]>("GET", `/clusters/${uuid}/events`, { params });
+  }
+
+  async getClusterVisualizer(uuid: string): Promise<VisualizerData> {
+    return this.requestWithRetry<VisualizerData>("GET", `/clusters/${uuid}/visualizer`);
+  }
+
+  async listClusterSecrets(uuid: string): Promise<SwarmSecret[]> {
+    return this.requestWithRetry<SwarmSecret[]>("GET", `/clusters/${uuid}/secrets`);
+  }
+
+  async createClusterSecret(uuid: string, data: CreateSecretInput): Promise<unknown> {
+    return this.requestWithRetry<unknown>("POST", `/clusters/${uuid}/secrets`, { body: data });
+  }
+
+  async removeClusterSecret(uuid: string, secretId: string): Promise<unknown> {
+    return this.requestWithRetry<unknown>("DELETE", `/clusters/${uuid}/secrets/${secretId}`);
+  }
+
+  async listClusterConfigs(uuid: string): Promise<SwarmConfig[]> {
+    return this.requestWithRetry<SwarmConfig[]>("GET", `/clusters/${uuid}/configs`);
+  }
+
+  async createClusterConfig(uuid: string, data: CreateConfigInput): Promise<unknown> {
+    return this.requestWithRetry<unknown>("POST", `/clusters/${uuid}/configs`, { body: data });
+  }
+
+  async removeClusterConfig(uuid: string, configId: string): Promise<unknown> {
+    return this.requestWithRetry<unknown>("DELETE", `/clusters/${uuid}/configs/${configId}`);
   }
 
   // ---- Feature Detection ----

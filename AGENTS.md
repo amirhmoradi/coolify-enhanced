@@ -48,6 +48,37 @@ Network management uses a post-deployment hook approach — zero overlay files f
 
 See `docs/features/network-management/` for PRD, implementation plan, and feature overview.
 
+### Cluster Management Architecture
+
+Cluster management provides a full Docker Swarm dashboard, node management, service/task monitoring, visualizer, secrets/configs management, and structured deployment configuration — all behind an orchestrator abstraction layer.
+
+**Key files:**
+- `src/Contracts/ClusterDriverInterface.php` — 28-method orchestrator abstraction (K8s-ready)
+- `src/Drivers/SwarmClusterDriver.php` — Docker Swarm implementation via SSH+CLI
+- `src/Models/Cluster.php` — Cluster entity (team-scoped, encrypted settings, metadata cache)
+- `src/Services/ClusterDetectionService.php` — Auto-detection from Swarm managers + IP-based server linking
+- `src/Jobs/ClusterSyncJob.php` — Background metadata refresh
+- `src/Jobs/ClusterEventCollectorJob.php` — Event stream collection to DB
+- `src/Policies/ClusterPolicy.php` — Team-scoped authorization (viewAny, view, create, update, delete, manageNodes, manageServices, manageSecrets, manageConfigs)
+- `src/Http/Controllers/Api/ClusterController.php` — 21-endpoint REST API
+- `src/Notifications/ClusterDegraded.php`, `ClusterUnreachable.php`, `ClusterRecovered.php` — Status transition notifications
+
+**Critical patterns:**
+- All Docker CLI arguments pass through `escapeshellarg()` via `$this->escape()` helper
+- Write operations use `execWrite()` with `throwError: true` — exceptions indicate failure, not string matching
+- All queries team-scoped via `Cluster::ownedByTeam(currentTeam()->id)`
+- Cache follows `cluster:{id}:{resource}` pattern with explicit invalidation on writes
+- `getNodes()` uses batch `docker node inspect` (single SSH call for all nodes, not N+1)
+- Join tokens stored in `settings` column with `encrypted:array` cast
+- Feature flag guard on every entry point: `config('coolify-enhanced.cluster_management', false)`
+- Notifications fire on status transitions in `syncClusterMetadata()` with deduplication guard
+
+**11 Livewire components:** ClusterList, ClusterDashboard, ClusterServiceViewer, ClusterVisualizer, ClusterEvents, ClusterNodeManager, ClusterAddNode, SwarmConfigForm, ClusterSecrets, ClusterConfigs, SwarmTaskStatus
+
+**Overlay files (1):** `src/Overrides/Views/livewire/project/application/swarm.blade.php` — replaces YAML textarea with SwarmConfigForm when cluster management is enabled
+
+See `docs/features/cluster-management/` for PRD, implementation plan, and feature overview.
+
 ### Key Characteristics
 
 1. **Addon, not core modification** - All code lives in a separate package (with overlay files for encryption)

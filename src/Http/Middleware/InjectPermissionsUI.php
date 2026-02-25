@@ -2,10 +2,12 @@
 
 namespace AmirhMoradi\CoolifyEnhanced\Http\Middleware;
 
+use AmirhMoradi\CoolifyEnhanced\Models\Cluster;
 use AmirhMoradi\CoolifyEnhanced\Services\PermissionService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -14,6 +16,7 @@ class InjectPermissionsUI
     /**
      * Inject UI components into Coolify pages:
      * - Access matrix on team admin page
+     * - Cluster navigation in sidebar (when cluster management enabled)
      *
      * Note: Resource backup sidebar items are added via view overlays
      * (not middleware injection) so they integrate natively with
@@ -26,7 +29,6 @@ class InjectPermissionsUI
     {
         $response = $next($request);
 
-        // Must be HTML, successful, and authenticated
         if (! $this->isInjectableResponse($response) || ! auth()->check()) {
             return $response;
         }
@@ -38,12 +40,15 @@ class InjectPermissionsUI
 
         $injections = '';
 
-        // Inject access matrix on team admin page
         if ($this->isTeamAdminPage($request) && PermissionService::hasRoleBypass(auth()->user())) {
             $component = $this->renderAccessMatrix();
             if (! empty($component)) {
                 $injections .= $this->wrapWithInjector($component);
             }
+        }
+
+        if ($this->shouldInjectClusterNav()) {
+            $injections .= $this->renderClusterNavInjection();
         }
 
         if (! empty($injections)) {
@@ -167,6 +172,98 @@ class InjectPermissionsUI
 })();
 </script>
 <!-- End Coolify Enhanced - Access Matrix -->
+
+HTML;
+    }
+
+    /**
+     * Check if cluster navigation should be injected into the sidebar.
+     * Requires feature flags enabled and at least one cluster for the team.
+     */
+    protected function shouldInjectClusterNav(): bool
+    {
+        if (! config('coolify-enhanced.enabled')) {
+            return false;
+        }
+
+        if (! config('coolify-enhanced.cluster_management')) {
+            return false;
+        }
+
+        $teamId = auth()->user()->currentTeam()?->id;
+        if (! $teamId) {
+            return false;
+        }
+
+        return Cache::remember(
+            "cluster-nav-visible:{$teamId}",
+            60,
+            fn () => Cluster::where('team_id', $teamId)->exists()
+        );
+    }
+
+    /**
+     * Render the cluster navigation sidebar injection snippet.
+     * Inserts a "Clusters" link after the "Servers" link in Coolify's sidebar.
+     */
+    protected function renderClusterNavInjection(): string
+    {
+        return <<<'HTML'
+
+<!-- Coolify Enhanced - Cluster Navigation -->
+<div id="coolify-enhanced-cluster-nav" style="display:none;">
+    <a class="menu-item" href="/clusters">
+        <svg xmlns="http://www.w3.org/2000/svg" class="menu-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="6" height="6" rx="1"/>
+            <rect x="16" y="2" width="6" height="6" rx="1"/>
+            <rect x="9" y="14" width="6" height="6" rx="1"/>
+            <path d="M5 8v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/>
+            <path d="M12 12v2"/>
+        </svg>
+        <span class="menu-item-label">Clusters</span>
+    </a>
+</div>
+<script data-navigate-once>
+(function() {
+    function injectClusterNav() {
+        var nav = document.getElementById('coolify-enhanced-cluster-nav');
+        if (!nav || nav.dataset.injected === 'true') return;
+
+        var serverLinks = document.querySelectorAll('a.menu-item');
+        var serversLink = null;
+        for (var i = 0; i < serverLinks.length; i++) {
+            if (serverLinks[i].getAttribute('href') === '/servers') {
+                serversLink = serverLinks[i];
+                break;
+            }
+        }
+
+        if (serversLink) {
+            var clusterLink = nav.querySelector('a');
+            if (clusterLink) {
+                if (window.location.pathname.startsWith('/cluster')) {
+                    clusterLink.classList.add('menu-item-active');
+                }
+                serversLink.parentNode.insertBefore(clusterLink, serversLink.nextSibling);
+                nav.dataset.injected = 'true';
+            }
+        }
+        nav.style.display = 'none';
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', injectClusterNav);
+    } else {
+        injectClusterNav();
+    }
+    document.addEventListener('livewire:navigated', function() {
+        var nav = document.getElementById('coolify-enhanced-cluster-nav');
+        if (nav) nav.dataset.injected = '';
+        setTimeout(injectClusterNav, 50);
+    });
+})();
+</script>
+<!-- End Coolify Enhanced - Cluster Navigation -->
 
 HTML;
     }

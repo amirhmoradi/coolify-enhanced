@@ -73,6 +73,11 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
             $this->registerNetworkManagement();
         }
 
+        // Register cluster management if enabled
+        if (config('coolify-enhanced.cluster_management', false)) {
+            $this->registerClusterManagement();
+        }
+
         // Defer policy registration to AFTER all service providers have booted.
         //
         // Laravel boots package providers BEFORE application providers.
@@ -412,6 +417,9 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
 
             // Network management policy
             ManagedNetwork::class => \AmirhMoradi\CoolifyEnhanced\Policies\NetworkPolicy::class,
+
+            // Cluster management policy
+            \AmirhMoradi\CoolifyEnhanced\Models\Cluster::class => \AmirhMoradi\CoolifyEnhanced\Policies\ClusterPolicy::class,
         ];
 
         foreach ($policies as $model => $policy) {
@@ -481,5 +489,51 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
                 return PermissionService::canPerform($this, $action, $resource);
             });
         }
+    }
+
+    /**
+     * Register cluster management: Livewire components, periodic sync, and event collection.
+     */
+    protected function registerClusterManagement(): void
+    {
+        Livewire::component('enhanced::cluster-list', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterList::class);
+        Livewire::component('enhanced::cluster-dashboard', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterDashboard::class);
+        Livewire::component('enhanced::cluster-service-viewer', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterServiceViewer::class);
+        Livewire::component('enhanced::cluster-visualizer', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterVisualizer::class);
+        Livewire::component('enhanced::cluster-events', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterEvents::class);
+        Livewire::component('enhanced::cluster-node-manager', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterNodeManager::class);
+        Livewire::component('enhanced::cluster-add-node', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterAddNode::class);
+        Livewire::component('enhanced::swarm-config-form', \AmirhMoradi\CoolifyEnhanced\Livewire\SwarmConfigForm::class);
+        Livewire::component('enhanced::cluster-secrets', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterSecrets::class);
+        Livewire::component('enhanced::cluster-configs', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterConfigs::class);
+        Livewire::component('enhanced::swarm-task-status', \AmirhMoradi\CoolifyEnhanced\Livewire\SwarmTaskStatus::class);
+
+        $this->app->booted(function () {
+            $schedule = $this->app->make(\Illuminate\Console\Scheduling\Schedule::class);
+
+            $schedule->call(function () {
+                $interval = config('coolify-enhanced.cluster_sync_interval', 60);
+                \AmirhMoradi\CoolifyEnhanced\Models\Cluster::where('status', '!=', 'unreachable')
+                    ->each(function ($cluster) use ($interval) {
+                        $lastSync = data_get($cluster->metadata, 'last_sync_at');
+                        if ($lastSync && now()->diffInSeconds(\Carbon\Carbon::parse($lastSync)) < $interval) {
+                            return;
+                        }
+                        \AmirhMoradi\CoolifyEnhanced\Jobs\ClusterSyncJob::dispatch($cluster->id);
+                    });
+            })->everyMinute()->name('coolify-enhanced:cluster-sync')->withoutOverlapping();
+
+            $schedule->call(function () {
+                \AmirhMoradi\CoolifyEnhanced\Models\Cluster::where('status', '!=', 'unreachable')
+                    ->each(function ($cluster) {
+                        \AmirhMoradi\CoolifyEnhanced\Jobs\ClusterEventCollectorJob::dispatch($cluster->id);
+                    });
+            })->everyMinute()->name('coolify-enhanced:cluster-events')->withoutOverlapping();
+
+            $retentionDays = config('coolify-enhanced.cluster_event_retention_days', 7);
+            $schedule->call(function () use ($retentionDays) {
+                \AmirhMoradi\CoolifyEnhanced\Models\ClusterEvent::where('event_time', '<', now()->subDays($retentionDays))->delete();
+            })->daily()->name('coolify-enhanced:cluster-event-cleanup');
+        });
     }
 }

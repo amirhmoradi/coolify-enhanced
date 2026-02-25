@@ -81,4 +81,10 @@ Route::middleware(['web', 'auth', 'verified'])->group(function () {
     // Settings: Network management page
     Route::get('settings/networks', NetworkSettings::class)
         ->name('settings.networks');
+
+    // Cluster management pages
+    Route::get('clusters', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterList::class)
+        ->name('clusters.index');
+    Route::get('cluster/{cluster_uuid}', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterDashboard::class)
+        ->name('clusters.show');
 });

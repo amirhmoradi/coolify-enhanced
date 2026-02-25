@@ -543,3 +543,141 @@ export interface CreateNetworkInput {
 export interface AttachNetworkInput {
   network_uuid: string;
 }
+
+// ---- Clusters ----
+
+export type ClusterType = "swarm" | "kubernetes";
+
+export type ClusterStatus = "active" | "degraded" | "unreachable" | "unknown";
+
+export interface Cluster {
+  id: number;
+  uuid: string;
+  name: string;
+  description?: string;
+  type: ClusterType;
+  status: ClusterStatus;
+  settings?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  manager_server_id: number;
+  team_id: number;
+  manager_server?: Server;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+export interface ClusterNode {
+  id: string;
+  hostname: string;
+  role: string;
+  status: string;
+  availability: string;
+  ip?: string;
+  engine_version?: string;
+  cpu_cores?: number;
+  memory_bytes?: number;
+  labels?: Record<string, string>;
+  is_leader?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ClusterService {
+  id: string;
+  name: string;
+  image: string;
+  mode?: string;
+  replicas_running?: number;
+  replicas_desired?: number;
+  ports?: string[];
+  [key: string]: unknown;
+}
+
+export interface ClusterTask {
+  id: string;
+  name?: string;
+  node_id?: string;
+  service_id?: string;
+  status: string;
+  desired_state?: string;
+  error?: string;
+  image?: string;
+  [key: string]: unknown;
+}
+
+export interface ClusterEvent {
+  id: number;
+  cluster_id: number;
+  event_type?: string;
+  action?: string;
+  actor_id?: string;
+  actor_name?: string;
+  attributes?: Record<string, unknown>;
+  event_time?: string;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+export interface SwarmSecret {
+  id: string;
+  name: string;
+  labels?: Record<string, string>;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface SwarmConfig {
+  id: string;
+  name: string;
+  data?: string;
+  labels?: Record<string, string>;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CreateClusterInput {
+  name: string;
+  type?: ClusterType;
+  manager_server_id: number;
+  description?: string;
+}
+
+export interface UpdateClusterInput {
+  name?: string;
+  description?: string;
+  manager_server_id?: number;
+}
+
+export interface NodeActionInput {
+  action: "drain" | "activate" | "pause" | "promote" | "demote" | "add-label" | "remove-label";
+  label_key?: string;
+  label_value?: string;
+}
+
+export interface ScaleServiceInput {
+  replicas: number;
+}
+
+export interface CreateSecretInput {
+  name: string;
+  data: string;
+  labels?: Record<string, string>;
+}
+
+export interface CreateConfigInput {
+  name: string;
+  data: string;
+  labels?: Record<string, string>;
+}
+
+export interface ClusterEventFilter {
+  type?: string;
+  since?: number;
+  until?: number;
+  limit?: number;
+}
+
+export interface VisualizerData {
+  nodes: ClusterNode[];
+  tasks: ClusterTask[];
+}

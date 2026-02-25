@@ -1,5 +1,6 @@
 <?php
 
+use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\ClusterController;
 use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\CustomTemplateSourceController;
 use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\NetworkController;
 use AmirhMoradi\CoolifyEnhanced\Http\Controllers\Api\PermissionsController;
@@ -96,5 +97,49 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\ApiAllowed::class, 'api.
         ->middleware('api.ability:write');
 
     Route::delete('/resources/{type}/{uuid}/networks/{network_uuid}', [NetworkController::class, 'detachResource'])
+        ->middleware('api.ability:write');
+
+    // Cluster management
+    Route::get('/clusters', [ClusterController::class, 'index'])
+        ->middleware('api.ability:read');
+    Route::post('/clusters', [ClusterController::class, 'create'])
+        ->middleware('api.ability:write');
+    Route::get('/clusters/{uuid}', [ClusterController::class, 'show'])
+        ->middleware('api.ability:read');
+    Route::patch('/clusters/{uuid}', [ClusterController::class, 'update'])
+        ->middleware('api.ability:write');
+    Route::delete('/clusters/{uuid}', [ClusterController::class, 'destroy'])
+        ->middleware('api.ability:write');
+    Route::post('/clusters/{uuid}/sync', [ClusterController::class, 'sync'])
+        ->middleware('api.ability:write');
+    Route::get('/clusters/{uuid}/nodes', [ClusterController::class, 'nodes'])
+        ->middleware('api.ability:read');
+    Route::post('/clusters/{uuid}/nodes/{nodeId}/action', [ClusterController::class, 'nodeAction'])
+        ->middleware('api.ability:write');
+    Route::delete('/clusters/{uuid}/nodes/{nodeId}', [ClusterController::class, 'removeNode'])
+        ->middleware('api.ability:write');
+    Route::get('/clusters/{uuid}/services', [ClusterController::class, 'services'])
+        ->middleware('api.ability:read');
+    Route::get('/clusters/{uuid}/services/{serviceId}/tasks', [ClusterController::class, 'serviceTasks'])
+        ->middleware('api.ability:read');
+    Route::post('/clusters/{uuid}/services/{serviceId}/scale', [ClusterController::class, 'scaleService'])
+        ->middleware('api.ability:write');
+    Route::post('/clusters/{uuid}/services/{serviceId}/rollback', [ClusterController::class, 'rollbackService'])
+        ->middleware('api.ability:write');
+    Route::get('/clusters/{uuid}/events', [ClusterController::class, 'events'])
+        ->middleware('api.ability:read');
+    Route::get('/clusters/{uuid}/visualizer', [ClusterController::class, 'visualizer'])
+        ->middleware('api.ability:read');
+    Route::get('/clusters/{uuid}/secrets', [ClusterController::class, 'secrets'])
+        ->middleware('api.ability:read');
+    Route::post('/clusters/{uuid}/secrets', [ClusterController::class, 'createSecret'])
+        ->middleware('api.ability:write');
+    Route::delete('/clusters/{uuid}/secrets/{secretId}', [ClusterController::class, 'removeSecret'])
+        ->middleware('api.ability:write');
+    Route::get('/clusters/{uuid}/configs', [ClusterController::class, 'configs'])
+        ->middleware('api.ability:read');
+    Route::post('/clusters/{uuid}/configs', [ClusterController::class, 'createConfig'])
+        ->middleware('api.ability:write');
+    Route::delete('/clusters/{uuid}/configs/{configId}', [ClusterController::class, 'removeConfig'])
         ->middleware('api.ability:write');
 });

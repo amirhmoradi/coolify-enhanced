@@ -4,9 +4,9 @@
 [![Build and Publish Docker Image](https://github.com/amirhmoradi/coolify-enhanced/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/amirhmoradi/coolify-enhanced/actions/workflows/docker-publish.yml)
 [![Docker Image](https://img.shields.io/badge/ghcr.io-coolify--enhanced-blue)](https://ghcr.io/amirhmoradi/coolify-enhanced)
 
-**The missing enterprise features for Coolify v4 — granular permissions, encrypted backups, volume/config backups, custom service templates, enhanced database classification, and Docker network isolation.**
+**The missing enterprise features for Coolify v4 — granular permissions, encrypted backups, volume/config backups, custom service templates, enhanced database classification, Docker network isolation, and Docker Swarm cluster management.**
 
-Coolify Enhanced is a drop-in addon for [Coolify](https://coolify.io) that adds the access control, backup security, and template extensibility features that teams need when running Coolify in production. It installs in under 2 minutes, requires zero changes to your existing setup, and can be removed cleanly at any time.
+Coolify Enhanced is a drop-in addon for [Coolify](https://coolify.io) that adds access control, backup security, template extensibility, and Docker Swarm cluster management that teams need when running Coolify in production. It installs in under 2 minutes, requires zero changes to your existing setup, and can be removed cleanly at any time.
 
 > If you're coming from Dokploy, Portainer, CapRover, or another open-source PaaS and chose Coolify for its simplicity — this addon fills the remaining gaps for team management and backup security.
 
@@ -24,7 +24,8 @@ Coolify v4 is an excellent self-hosted PaaS, but ships with a few limitations fo
 | **Service templates** | Limited to Coolify's built-in 200+ templates | Add unlimited custom templates from any GitHub repository |
 | **Database classification** | Many databases (Memgraph, Milvus, Qdrant, etc.) misclassified as applications | 50+ additional database images recognized; explicit label and comment overrides |
 | **Network isolation** | All containers share a single flat Docker network | Per-environment bridge networks, dedicated proxy network, cross-env shared networks, Docker Swarm overlay support |
-| **MCP Server (AI Assistant Integration)** | None | 99+ MCP tools covering all Coolify (and Coolify Enhanced) API endpoints |
+| **MCP Server (AI Assistant Integration)** | None | 119+ MCP tools covering all Coolify (and Coolify Enhanced) API endpoints |
+| **Cluster management** | Checkbox-only Swarm config, no dashboard, no node management | Full cluster dashboard, node management, service/task viewer, visualizer, secrets/configs, structured deploy config |
 
 
 All features are **independent** — enable only what you need. When disabled, Coolify behaves exactly as stock.
@@ -44,6 +45,7 @@ All features are **independent** — enable only what you need. When disabled, C
   - [Enhanced Database Classification](#5-enhanced-database-classification)
   - [Network Management](#6-network-management)
   - [MCP Server](#7-mcp-server)
+  - [Cluster Management](#8-cluster-management)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
@@ -108,11 +110,24 @@ All features are **independent** — enable only what you need. When disabled, C
 - Name collision handling — built-in templates always take precedence
 - Deployed services are independent of template sources (write-once)
 
+### Cluster Management (Docker Swarm)
+- **Cluster Dashboard** — real-time status cards, node listing, service/task counts
+- **Node Management** — drain/activate/pause, promote/demote, add/remove nodes, label CRUD
+- **Service/Task Viewer** — table with inline task expansion, scaling, rollback, force update
+- **Cluster Visualizer** — dual view: Portainer-style column-per-node grid + topology map
+- **Swarm Secrets & Configs** — full CRUD for Docker Swarm primitives
+- **Structured Swarm Config** — form replacing raw YAML textarea for replicas, placement, rollback, health checks, resource limits
+- **Event Log** — real-time cluster event stream with type/action filters
+- **Auto-detection** — discovers Swarm clusters from existing manager servers
+- **K8s-ready architecture** — orchestrator abstraction layer (`ClusterDriverInterface`) for future Kubernetes support
+- **20 MCP tools** for AI-driven cluster management
+- **Status notifications** — alerts when clusters degrade or become unreachable
+
 ### MCP Server (AI Assistant Integration)
-- **99+ MCP tools** wrapping all Coolify API endpoints for AI-driven infrastructure management
+- **119+ MCP tools** wrapping all Coolify API endpoints for AI-driven infrastructure management
 - Works with **Claude Desktop**, **Cursor**, **VS Code Copilot**, **Kiro IDE**, and any MCP-compatible client
 - **Core tools** (72) work with standard Coolify — no addon required
-- **Enhanced tools** (27) for permissions, resource backups, custom templates, and network management
+- **Enhanced tools** (47) for permissions, resource backups, custom templates, network management, and cluster management
 - **Auto-detection** of coolify-enhanced features — falls back gracefully to core tools
 - **Tool annotations** — read-only, destructive, and idempotent hints for AI safety
 - Install via `npx @amirhmoradi/coolify-enhanced-mcp`
@@ -256,7 +271,7 @@ cd /data/coolify/source && bash upgrade.sh
 
 > Coolify natively supports `docker-compose.custom.yml` — it is merged with the main compose file and survives upgrades.
 
-That's it. Navigate to **Team > Admin** to see the Access Matrix, open any **S3 Storage** page for encryption settings, and check **Settings > Templates** to add custom template sources.
+That's it. Navigate to **Team > Admin** to see the Access Matrix, open any **S3 Storage** page for encryption settings, check **Settings > Templates** to add custom template sources, and enable `COOLIFY_CLUSTER_MANAGEMENT=true` to access the cluster dashboard.
 
 ---
 
@@ -747,6 +762,93 @@ See [mcp-server/README.md](mcp-server/README.md) for detailed information.
 
 ---
 
+### 8. Cluster Management
+
+Coolify v4 has experimental Docker Swarm support but lacks any cluster management or monitoring UI. Coolify Enhanced adds a comprehensive cluster dashboard, node management, service/task monitoring, a dual-view visualizer, Swarm secrets and configs management, and a structured deployment configuration form — all behind a K8s-ready orchestrator abstraction layer.
+
+#### What It Provides
+
+| Capability | Description |
+|------------|-------------|
+| **Cluster Dashboard** | Status cards (health, nodes, services, tasks), resource usage, full node listing table with auto-refresh |
+| **Node Management** | Drain/Activate/Pause availability, Promote/Demote role, Remove node, Label CRUD, Add Node wizard with join command |
+| **Service/Task Viewer** | Table of all Swarm services with inline task expansion — click a service to see its tasks per node, status, and errors |
+| **Cluster Visualizer** | Dual view toggle — **Grid View** (Portainer-style columns per node with color-coded task blocks) and **Topology View** (interactive node hierarchy with manager/worker relationships) |
+| **Swarm Secrets** | Create and remove Docker secrets with local metadata tracking |
+| **Swarm Configs** | Create, view content, and remove Docker configs |
+| **Structured Swarm Config** | Replaces Coolify's raw YAML textarea with a form: mode (replicated/global), replicas, update/rollback policy, placement constraints, resource limits, health check, restart policy |
+| **Event Log** | Real-time stream of Swarm events (service updates, node status changes, task rescheduling) with type/action filters and configurable retention |
+| **Auto-detection** | Discovers Swarm clusters from existing manager servers; auto-links workers by IP matching |
+| **Status Notifications** | Alerts when clusters degrade (nodes down) or become unreachable, and recovery notifications |
+| **MCP Tools** | 20 AI tools for cluster management via the MCP server |
+
+#### Architecture
+
+```
+UI (Livewire Components)
+    ↓
+Cluster::driver()
+    ↓
+ClusterDriverInterface (Contract)
+    ↓
+SwarmClusterDriver (SSH → docker CLI → JSON parse → cached results)
+    ↓
+Future: KubernetesClusterDriver (kubectl / K8s API)
+```
+
+The orchestrator abstraction layer means Kubernetes support can be added later by implementing `ClusterDriverInterface` — no UI or business logic changes needed.
+
+#### How It Works
+
+```
+1. Auto-detect: Scan team's servers for Swarm managers via `docker info`
+2. Create Cluster record (uuid, name, type, team-scoped)
+3. Sync metadata: node count, manager count, join tokens (encrypted), service count
+4. Background jobs: ClusterSyncJob (metadata refresh), ClusterEventCollectorJob (event stream)
+5. Dashboard: Real-time view via Livewire polling with configurable cache TTL
+```
+
+All Docker commands execute via SSH through Coolify's `instant_remote_process()`. JSON output format (`--format '{{json .}}'`) ensures reliable parsing. All interpolated values pass through `escapeshellarg()` to prevent command injection.
+
+#### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `COOLIFY_CLUSTER_MANAGEMENT` | `false` | Enable cluster management feature |
+| `COOLIFY_CLUSTER_SYNC_INTERVAL` | `60` | Metadata sync interval (seconds) |
+| `COOLIFY_CLUSTER_CACHE_TTL` | `30` | Docker API response cache TTL (seconds) |
+| `COOLIFY_CLUSTER_EVENT_RETENTION` | `7` | Event log retention (days) |
+
+#### Where to Find It
+
+| Location | What You See |
+|----------|-------------|
+| **Sidebar > Clusters** | Card grid of team's clusters with status indicators and metadata |
+| **Cluster > Overview** | Dashboard with status cards, node listing table |
+| **Cluster > Nodes** | Node management with action dropdowns and label editor |
+| **Cluster > Services** | Service table with inline task expansion, scaling, rollback |
+| **Cluster > Visualizer** | Dual-view task placement visualization |
+| **Cluster > Events** | Filterable event log with type/action filters |
+| **Cluster > Secrets** | Docker secret management |
+| **Cluster > Configs** | Docker config management with content viewer |
+| **Application > Swarm** | Structured deployment config (when cluster management enabled) |
+| **Any Swarm resource** | Inline task status widget showing Swarm task distribution |
+
+#### Key Design Decisions
+
+| Decision | Why |
+|----------|-----|
+| Orchestrator abstraction (`ClusterDriverInterface`) | K8s-ready without rewrite |
+| SSH-based Docker CLI (not Docker API socket) | Consistent with Coolify's pattern |
+| Explicit Cluster model (not implicit grouping) | Supports naming, settings, multi-type |
+| Livewire polling (not WebSocket) | Consistent with Coolify; no extra infra |
+| Cached with configurable TTL | Prevents SSH storm on dashboards |
+| Team-scoped clusters | Inherits Coolify's multi-tenancy |
+
+See the full [Cluster Management documentation](docs/features/cluster-management/) for PRD, implementation plan, and detailed feature overview.
+
+---
+
 ## Installation
 
 ### Requirements
@@ -838,6 +940,10 @@ For detailed instructions including manual install, database migrations, and tro
 | `COOLIFY_NETWORK_ISOLATION_MODE` | `environment` | Isolation mode: `none`, `environment`, or `strict` |
 | `COOLIFY_MAX_NETWORKS` | `200` | Maximum managed networks per server |
 | `COOLIFY_SWARM_OVERLAY_ENCRYPTION` | `false` | Enable IPsec for Swarm overlay networks |
+| `COOLIFY_CLUSTER_MANAGEMENT` | `false` | Enable Docker Swarm cluster management dashboard |
+| `COOLIFY_CLUSTER_SYNC_INTERVAL` | `60` | Cluster metadata sync interval in seconds |
+| `COOLIFY_CLUSTER_CACHE_TTL` | `30` | Docker API response cache TTL in seconds |
+| `COOLIFY_CLUSTER_EVENT_RETENTION` | `7` | Cluster event log retention in days |
 
 > For backward compatibility, `COOLIFY_GRANULAR_PERMISSIONS=true` also enables the addon.
 
@@ -855,8 +961,8 @@ This creates `config/coolify-enhanced.php` with options for permission levels, b
 
 | State | Behavior |
 |-------|----------|
-| **Enabled** (`COOLIFY_ENHANCED=true`) | All features active — permissions enforced, encryption available, templates loaded |
-| **Disabled** (`COOLIFY_ENHANCED=false`) | Standard Coolify behavior — all team members have full access, no encryption, no custom templates |
+| **Enabled** (`COOLIFY_ENHANCED=true`) | All features active — permissions enforced, encryption available, templates loaded, cluster management available |
+| **Disabled** (`COOLIFY_ENHANCED=false`) | Standard Coolify behavior — all team members have full access, no encryption, no custom templates, no cluster dashboard |
 
 Permission and encryption settings are preserved in the database when disabled. Re-enabling restores them instantly.
 
@@ -918,6 +1024,32 @@ All endpoints require Bearer token authentication (Laravel Sanctum).
 | `POST` | `/api/v1/networks/resource/{type}/{uuid}/attach` | Attach a resource to a network |
 | `DELETE` | `/api/v1/networks/resource/{type}/{uuid}/{networkUuid}` | Detach a resource from a network |
 
+### Cluster Management API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/clusters` | List team's clusters |
+| `POST` | `/api/v1/clusters` | Create cluster |
+| `GET` | `/api/v1/clusters/{uuid}` | Get cluster details |
+| `PATCH` | `/api/v1/clusters/{uuid}` | Update cluster settings |
+| `DELETE` | `/api/v1/clusters/{uuid}` | Delete cluster |
+| `POST` | `/api/v1/clusters/{uuid}/sync` | Force metadata sync |
+| `GET` | `/api/v1/clusters/{uuid}/nodes` | List nodes |
+| `POST` | `/api/v1/clusters/{uuid}/nodes/{id}/action` | Node action (drain/activate/promote/demote) |
+| `DELETE` | `/api/v1/clusters/{uuid}/nodes/{id}` | Remove node |
+| `GET` | `/api/v1/clusters/{uuid}/services` | List services |
+| `GET` | `/api/v1/clusters/{uuid}/services/{id}/tasks` | Get service tasks |
+| `POST` | `/api/v1/clusters/{uuid}/services/{id}/scale` | Scale service |
+| `POST` | `/api/v1/clusters/{uuid}/services/{id}/rollback` | Rollback service |
+| `GET` | `/api/v1/clusters/{uuid}/events` | Get cluster events |
+| `GET` | `/api/v1/clusters/{uuid}/visualizer` | Get visualizer data |
+| `GET` | `/api/v1/clusters/{uuid}/secrets` | List secrets |
+| `POST` | `/api/v1/clusters/{uuid}/secrets` | Create secret |
+| `DELETE` | `/api/v1/clusters/{uuid}/secrets/{id}` | Remove secret |
+| `GET` | `/api/v1/clusters/{uuid}/configs` | List configs |
+| `POST` | `/api/v1/clusters/{uuid}/configs` | Create config |
+| `DELETE` | `/api/v1/clusters/{uuid}/configs/{id}` | Remove config |
+
 For full request/response examples, see the [API Documentation](docs/api.md).
 
 ---
@@ -971,7 +1103,7 @@ Coolify Enhanced is a **Laravel package** that extends Coolify via its service p
 |-----------|----------|
 | **Policy overrides** via `Gate::policy()` in `$app->booted()` | Granular permissions — replaces Coolify's permissive defaults |
 | **View overlays** — modified copies of Coolify Blade views | Backup sidebar items, encryption form, template source labels |
-| **Middleware injection** | Access Matrix on Team Admin page |
+| **Middleware injection** | Access Matrix on Team Admin page, Clusters sidebar link |
 | **File overlays in Docker image** | Encryption-aware backup/restore jobs, custom template loading, expanded database classification |
 | **S6-overlay service** | Auto-run database migrations on container start |
 
@@ -1010,6 +1142,27 @@ auth_token (encrypted)
 is_enabled
 sync_status / last_synced_at / sync_error
 
+clusters                             cluster_events
+--------                             --------------
+id / uuid                            id
+name / description                   cluster_id (FK)
+type (swarm|kubernetes)              event_type / action
+status (healthy|degraded|...)        actor_id / actor_name
+manager_server_id (FK)               attributes (JSON)
+team_id (FK)                         scope / event_time
+settings (encrypted JSON)
+metadata (JSON)
+
+servers (added column)               swarm_secrets
+----------------------               -------------
+cluster_id (FK, nullable)            id / docker_id
+                                     cluster_id (FK)
+swarm_configs                        name / labels (JSON)
+-------------                        description
+id / docker_id
+cluster_id (FK)
+name / data / labels (JSON)
+
 managed_networks                     resource_networks
 ----------------                     -----------------
 id / uuid                            id
@@ -1033,6 +1186,7 @@ Each feature has detailed documentation under `docs/features/<feature-name>/`:
 | Enhanced Database Classification | [`docs/features/enhanced-database-classification/`](docs/features/enhanced-database-classification/) | PRD, implementation plan, feature overview |
 | Network Management | [`docs/features/network-management/`](docs/features/network-management/) | PRD, implementation plan, feature overview |
 | MCP Server | [`docs/features/mcp-server/`](docs/features/mcp-server/) | PRD, implementation plan, feature overview |
+| Cluster Management | [`docs/features/cluster-management/`](docs/features/cluster-management/) | PRD, implementation plan, feature overview |
 
 Each feature folder contains:
 - **PRD.md** — Product Requirements Document (problem, goals, design, rationale, risks)
@@ -1069,6 +1223,7 @@ NaCl SecretBox (XSalsa20 stream cipher + Poly1305 MAC) via rclone's crypt backen
 | Encrypted S3 backups | Yes | No | No | No |
 | Volume & config backups | Yes | No | No | No |
 | Custom service templates | Yes | No | App Templates | One-click apps |
+| Cluster management | Yes (Swarm) | Basic (Swarm) | Full (Swarm + K8s) | No |
 | Open source | MIT | MIT | Partial (CE/BE) | Apache 2.0 |
 | Self-hosted PaaS | Yes | Yes | Container mgmt | Yes |
 
@@ -1112,4 +1267,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Built for teams that self-host with Coolify and need production-grade access control, backup security, and template flexibility.**
+**Built for teams that self-host with Coolify and need production-grade access control, backup security, template flexibility, and cluster management.**
