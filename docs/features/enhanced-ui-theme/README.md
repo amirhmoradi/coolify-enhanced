@@ -4,8 +4,9 @@ Optional corporate-grade modern UI theme for Coolify. Activatable under **Settin
 
 ## Overview
 
+- **Design system direction** — Linear-inspired enterprise SaaS style (deep neutrals, crisp borders, focused accent usage).
 - **CSS and minimal JavaScript only** — no structural DOM or layout changes.
-- **Light and dark modes** — warm neutrals (light) and near-black layered grays (dark) with a single accent.
+- **Light and dark modes** — clean cool surfaces in light mode and deep neutral layers in dark mode.
 - **Same base framework** — Tailwind; theme overrides tokens and key selectors when enabled.
 - **Instance-wide** — preference stored in `enhanced_ui_settings`; reload the page after toggling.
 - **Admin-controlled** — Appearance tab is visible to owner/admin users.

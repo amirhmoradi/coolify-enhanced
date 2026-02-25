@@ -51,7 +51,7 @@ See `docs/features/network-management/` for PRD, implementation plan, and featur
 
 ### Enhanced UI Theme Architecture
 
-Optional corporate-grade theme applied via scoped CSS (`[data-ce-theme="enhanced"]`) when the user enables it in Settings > Appearance. No structural changes; one base layout overlay injects theme stylesheet and script.
+Optional corporate-grade theme applied via scoped CSS (`[data-ce-theme="enhanced"]`) when the user enables it in Settings > Appearance. The current design language is Linear-inspired (deep neutrals, crisp borders, restrained accent usage). No structural changes; one base layout overlay injects theme stylesheet and script.
 
 **Key files:**
 - `src/Models/EnhancedUiSettings.php` — Key-value store for `enhanced_theme_enabled`
@@ -60,7 +60,7 @@ Optional corporate-grade theme applied via scoped CSS (`[data-ce-theme="enhanced
 - `resources/assets/theme.css` — Scoped overrides for light and dark modes
 - Global helper `enhanced_theme_enabled()` — Used by base layout overlay; returns false if package is disabled and uses DB value with config fallback (`coolify-enhanced.ui_theme.enabled`)
 
-**Pitfalls:** Base layout overlay is a full copy; keep in sync with Coolify upstream. Keep Appearance tab visibility aligned with route/component auth (owner/admin only) to avoid navigation dead-ends for other roles.
+**Pitfalls:** Base layout overlay is a full copy; keep in sync with Coolify upstream. Keep Appearance tab visibility aligned with route/component auth (owner/admin only) to avoid navigation dead-ends for other roles. Keep theme color work token-driven in `theme.css` (`--ce-*` variables) before adding selector-specific overrides.
 
 See `docs/features/enhanced-ui-theme/` for PRD, plan, and README.
 

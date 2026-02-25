@@ -18,6 +18,7 @@ The addon needs an opt-in theme that improves visual design while remaining oper
 3. Apply styling with **scoped CSS + minimal JS only**
 4. Keep feature behavior unchanged when theme is disabled
 5. Preserve compatibility with Coolify’s existing Tailwind-based UI
+6. Use a **Linear-inspired modern SaaS visual system** (deep neutrals, crisp borders, restrained accent usage)
 
 ## Non-Goals
 

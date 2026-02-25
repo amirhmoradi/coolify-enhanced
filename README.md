@@ -861,8 +861,9 @@ An optional corporate-grade modern UI theme with a refined color palette and lig
 
 - **Settings > Appearance** — single toggle "Use enhanced theme"; **disabled by default**.
 - **Instance-wide** — preference stored in the database; reload the page after toggling to see changes.
-- **Light mode** — warm off-white base (#FAFAF9), soft grays, single accent (indigo).
-- **Dark mode** — near-black base (#0F0F0F), layered grays, same accent.
+- **Design direction** — Linear-inspired modern SaaS system with restrained accent usage and high-contrast hierarchy.
+- **Light mode** — clean enterprise surfaces (`#F5F7FB` base) with crisp borders.
+- **Dark mode** — deep neutrals (`#080B12` base) with layered surfaces for clarity.
 
 See [Enhanced UI Theme](docs/features/enhanced-ui-theme/README.md) for feature overview, and [PRD](docs/features/enhanced-ui-theme/PRD.md) / [plan](docs/features/enhanced-ui-theme/plan.md) for full implementation details.
 

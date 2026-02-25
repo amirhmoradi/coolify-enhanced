@@ -11,6 +11,7 @@ Keep changes narrow and maintainable:
 3. Apply theme through a single layout overlay with conditional CSS injection
 4. Scope all style overrides under `data-ce-theme="enhanced"`
 5. Preserve stock behavior when theme is disabled
+6. Keep visual decisions token-driven (`--ce-*` palette) with a Linear-inspired SaaS style baseline
 
 ## Tasks
 
