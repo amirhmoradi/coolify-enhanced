@@ -352,12 +352,11 @@ class TemplateSourceService
         $tags = str($data->get('tags', ''))->lower()->explode(',')->map(fn ($tag) => trim($tag))->filter();
         $tags = $tags->isEmpty() ? null : $tags->values()->all();
 
-        // Resolve logo: absolute URLs are used directly, relative paths become raw GitHub URLs
+        // Resolve logo: absolute URLs are used directly, relative paths are from repo root (raw GitHub URLs)
         $logo = $data->get('logo', 'svgs/default.webp');
         if ($logo && ! preg_match('#^https?://#', $logo)) {
-            // Resolve relative to the folder containing the templates
-            $logoPath = $folderPath ? "{$folderPath}/{$logo}" : $logo;
-            // Check if the path goes up a directory (e.g., ../logos/foo.svg)
+            // Relative paths are resolved from the repository root so icons at repo root (e.g. svgs/*.svg) load correctly
+            $logoPath = ltrim($logo, '/');
             $logoPath = static::resolveRelativePath($logoPath);
             $logo = "{$rawBase}/{$logoPath}";
         }

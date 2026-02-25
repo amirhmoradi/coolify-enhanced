@@ -69,7 +69,7 @@ Add these comment lines at the **top** of your YAML file, before any YAML conten
 | `slogan` | No | Short description shown below the service name. Keep it under 80 characters. Defaults to the filename in Title Case. |
 | `tags` | No | Comma-separated list of search tags. Helps users find the template via the search bar. |
 | `category` | No | Category for filtering (e.g., `monitoring`, `cms`, `ai`, `development`). Supports multiple categories separated by commas: `category: monitoring,devops`. |
-| `logo` | No | Path to the service logo. Can be a relative path (resolved from the template folder) or an absolute URL (`https://...`). SVG format is strongly preferred. Defaults to `svgs/default.webp`. |
+| `logo` | No | Path to the service logo. Can be a relative path (resolved from the **repository root**) or an absolute URL (`https://...`). SVG format is strongly preferred. Defaults to `svgs/default.webp`. |
 | `port` | No | The primary port the service listens on. Used for generating `SERVICE_URL_*` variables. |
 | `env_file` | No | Path to an `.env` file (relative to the template folder) containing default environment variables. |
 | `type` | No | `database` or `application`. Overrides automatic classification for all services in the template. See [Database Classification](#database-classification). |
@@ -233,7 +233,7 @@ services:
 ### Logos
 
 - **SVG format** is strongly preferred.
-- **Relative paths** are resolved from the template folder and converted to raw GitHub URLs (e.g., `logo: ../logos/myservice.svg`).
+- **Relative paths** are resolved from the **repository root** and converted to raw GitHub URLs (e.g., `logo: svgs/myservice.svg` or `logo: logos/myservice.svg`).
 - **Absolute URLs** are used directly (e.g., `logo: https://example.com/logo.svg`).
 - If no logo is specified, the default Coolify placeholder is used.
 
@@ -243,9 +243,11 @@ Relative path example with this repo structure:
 my-templates/
 ├── templates/
 │   └── compose/
-│       └── myservice.yaml     # logo: ../logos/myservice.svg
+│       └── myservice.yaml     # logo: svgs/myservice.svg
+├── svgs/
+│   └── myservice.svg
 └── logos/
-    └── myservice.svg
+    └── other.svg              # logo: logos/other.svg
 ```
 
 ## Database Classification
