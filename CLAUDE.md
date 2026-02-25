@@ -25,6 +25,7 @@ This is a Laravel package that extends Coolify v4 with three main features:
 6. **Network Management** — Per-environment Docker network isolation, shared networks, dedicated proxy network, server-level management UI, and per-resource network assignment
 7. **MCP Server** — Model Context Protocol server enabling AI assistants (Claude Desktop, Cursor, VS Code) to manage Coolify infrastructure via natural language
 8. **Cluster Management** — Comprehensive Docker Swarm cluster dashboard, node management, service/task monitoring, cluster visualizer, Swarm secrets/configs, and structured deployment configuration with K8s-ready abstraction layer
+9. **Enhanced UI Theme** — Optional corporate-grade modern UI theme (CSS + minimal JS only); activatable in Settings > Appearance; disabled by default
 
 It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image. The MCP server is a standalone TypeScript/Node.js package in `mcp-server/`.
 
@@ -257,7 +258,8 @@ coolify-enhanced/
 │   │   ├── Cluster.php                        # Cluster entity model
 │   │   ├── ClusterEvent.php                   # Cluster event log model
 │   │   ├── SwarmSecret.php                    # Swarm secret tracking model
-│   │   └── SwarmConfig.php                    # Swarm config tracking model
+│   │   ├── SwarmConfig.php                    # Swarm config tracking model
+│   │   └── EnhancedUiSettings.php             # Key-value UI settings (e.g. enhanced_theme_enabled)
 │   ├── Traits/
 │   │   └── HasS3Encryption.php                # S3 encryption helpers for model
 │   ├── Contracts/
@@ -302,7 +304,9 @@ coolify-enhanced/
 │   │   │   ├── livewire/project/new/
 │   │   │   │   └── select.blade.php         # New Resource page + custom source labels
 │   │   │   ├── components/settings/
-│   │   │   │   └── navbar.blade.php          # Settings navbar + Restore/Templates/Networks tabs
+│   │   │   │   └── navbar.blade.php          # Settings navbar + Restore/Templates/Networks/Appearance tabs
+│   │   │   ├── layouts/
+│   │   │   │   └── base.blade.php            # Base layout + conditional enhanced theme link/script
 │   │   │   └── components/server/
 │   │   │       └── sidebar.blade.php          # Server sidebar + Resource Backups + Networks items
 │   │   └── Helpers/
@@ -352,6 +356,7 @@ coolify-enhanced/
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
+│   ├── appearance-settings.blade.php          # Settings > Appearance (enhanced theme toggle)
 │   ├── storage-encryption-form.blade.php      # Path prefix + encryption form view
 │   ├── resource-backup-manager.blade.php      # Resource backup management view
 │   ├── resource-backup-page.blade.php         # Full-page backup view
@@ -372,6 +377,8 @@ coolify-enhanced/
 │   ├── cluster-configs.blade.php            # Configs management view
 │   ├── swarm-config-form.blade.php          # Structured Swarm config form
 │   └── swarm-task-status.blade.php          # Inline task status view
+├── resources/assets/
+│   └── theme.css                               # Enhanced UI theme (scoped; light + dark)
 ├── routes/                                     # API and web routes
 ├── config/                                     # Package configuration
 ├── docker/                                     # Docker build files
@@ -447,7 +454,11 @@ coolify-enhanced/
 | `src/Overrides/Views/livewire/storage/show.blade.php` | Storage page with encryption form |
 | `src/Livewire/ResourceBackupPage.php` | Server resource backups page component |
 | `src/Livewire/RestoreBackup.php` | Settings restore/import page with env var bulk import |
-| `src/Overrides/Views/components/settings/navbar.blade.php` | Settings navbar with Restore + Templates tabs |
+| `src/Overrides/Views/components/settings/navbar.blade.php` | Settings navbar with Restore + Templates + Appearance tabs |
+| `src/Overrides/Views/layouts/base.blade.php` | Base layout overlay; injects theme CSS/script when enhanced theme enabled |
+| `src/Models/EnhancedUiSettings.php` | Key-value UI settings (enhanced_theme_enabled) |
+| `src/Livewire/AppearanceSettings.php` | Settings > Appearance (enhanced theme toggle) |
+| `resources/assets/theme.css` | Enhanced UI theme (scoped; light + dark) |
 | `src/Overrides/Views/livewire/project/new/select.blade.php` | New Resource page with source labels, source filter, untested badges |
 | `src/Overrides/Helpers/shared.php` | Override get_service_templates() to merge custom + ignored templates |
 | `src/Services/TemplateSourceService.php` | GitHub API fetch, YAML parsing, template caching |
@@ -663,6 +674,7 @@ Two approaches are used to add UI components to Coolify pages:
 88. **Swarm secrets are immutable in Docker** — "Rotating" a secret means: create new secret, update all referencing services, remove old secret. This is a multi-step operation, not a simple update.
 89. **`docker system events` has time bounds** — Always use `--since` and `--until` to bound event queries. Without `--until`, the command blocks indefinitely waiting for new events.
 90. **Swarm node inspect returns NanoCPUs** — CPU count from `docker node inspect` is in nanoseconds (1 CPU = 1e9 NanoCPUs). Divide by 1e9 for core count.
+91. **Enhanced UI theme only applies when enabled** — Theme CSS and `data-ce-theme="enhanced"` are injected only when `enhanced_theme_enabled()` returns true (package enabled + DB setting). Base layout overlay is a full copy of Coolify's base; keep in sync with upstream when Coolify changes layouts.
 
 ## Important Notes
 
@@ -688,6 +700,7 @@ Two approaches are used to add UI components to Coolify pages:
 20. **Cluster management** - Docker Swarm cluster dashboard, node management, service/task monitoring, visualizer via `COOLIFY_CLUSTER_MANAGEMENT=true`
 21. **Cluster management is phased** - Phase 1: read-only visibility (zero overlays). Phase 2: write operations (one overlay). Phase 3: secrets/configs. Phase 4: integration + MCP
 22. **K8s-ready architecture** - `ClusterDriverInterface` contract decouples UI from orchestrator. Implement `KubernetesClusterDriver` to add K8s support without touching any UI code
+23. **Enhanced UI theme** - Optional corporate-grade theme (CSS + minimal JS only) via Settings > Appearance; disabled by default; preference in `enhanced_ui_settings` table
 
 ## See Also
 
@@ -696,6 +709,7 @@ Two approaches are used to add UI components to Coolify pages:
 - [docs/features/](docs/features/) - Per-feature documentation (PRD, plan, README)
 - [docs/features/mcp-server/](docs/features/mcp-server/) - MCP server feature documentation
 - [docs/features/cluster-management/](docs/features/cluster-management/) - Cluster management feature documentation (PRD, plan, README)
+- [docs/features/enhanced-ui-theme/](docs/features/enhanced-ui-theme/) - Enhanced UI theme (design, plan, README)
 - [mcp-server/README.md](mcp-server/README.md) - MCP server usage and tool reference
 - [docs/coolify-source/](docs/coolify-source/) - Coolify source code reference
 - [docs/architecture.md](docs/architecture.md) - Architecture details

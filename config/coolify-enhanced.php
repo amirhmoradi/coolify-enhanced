@@ -179,4 +179,18 @@ return [
     'cluster_sync_interval' => (int) env('COOLIFY_CLUSTER_SYNC_INTERVAL', 60),
     'cluster_cache_ttl' => (int) env('COOLIFY_CLUSTER_CACHE_TTL', 30),
     'cluster_event_retention_days' => (int) env('COOLIFY_CLUSTER_EVENT_RETENTION', 7),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Enhanced UI Theme
+    |--------------------------------------------------------------------------
+    |
+    | Optional corporate-grade modern UI theme (CSS + minimal JS only).
+    | When enabled in Settings > Appearance, applies a refined color palette
+    | and light/dark modes. Disabled by default; runtime value from DB.
+    |
+    */
+    'ui_theme' => [
+        'enabled' => env('COOLIFY_ENHANCED_UI_THEME', false),
+    ],
 ];

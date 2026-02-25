@@ -82,9 +82,18 @@ COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/service/conf
 COPY --chown=www-data:www-data src/Overrides/Views/components/server/sidebar.blade.php \
     /var/www/html/resources/views/components/server/sidebar.blade.php
 
-# Override settings navbar to add Restore + Templates tabs
+# Override settings navbar to add Restore + Templates + Appearance tabs
 COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.blade.php \
     /var/www/html/resources/views/components/settings/navbar.blade.php
+
+# Override base layout to inject enhanced UI theme when enabled
+COPY --chown=www-data:www-data src/Overrides/Views/layouts/base.blade.php \
+    /var/www/html/resources/views/layouts/base.blade.php
+
+# Enhanced UI theme CSS (optional corporate-grade theme, activatable in Settings > Appearance)
+RUN mkdir -p /var/www/html/public/vendor/coolify-enhanced
+COPY --chown=www-data:www-data resources/assets/theme.css \
+    /var/www/html/public/vendor/coolify-enhanced/theme.css
 
 # Override shared helper to merge custom template sources into service templates
 COPY --chown=www-data:www-data src/Overrides/Helpers/shared.php \

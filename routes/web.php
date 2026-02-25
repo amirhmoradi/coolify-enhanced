@@ -1,5 +1,6 @@
 <?php
 
+use AmirhMoradi\CoolifyEnhanced\Livewire\AppearanceSettings;
 use AmirhMoradi\CoolifyEnhanced\Livewire\CustomTemplateSources;
 use AmirhMoradi\CoolifyEnhanced\Livewire\NetworkManager;
 use AmirhMoradi\CoolifyEnhanced\Livewire\NetworkSettings;
@@ -81,6 +82,10 @@ Route::middleware(['web', 'auth', 'verified'])->group(function () {
     // Settings: Network management page
     Route::get('settings/networks', NetworkSettings::class)
         ->name('settings.networks');
+
+    // Settings: Appearance (enhanced UI theme)
+    Route::get('settings/appearance', AppearanceSettings::class)
+        ->name('settings.appearance');
 
     // Cluster management pages
     Route::get('clusters', \AmirhMoradi\CoolifyEnhanced\Livewire\ClusterList::class)

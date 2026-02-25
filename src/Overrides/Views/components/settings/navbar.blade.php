@@ -39,6 +39,11 @@
                         Networks
                     </a>
                 @endif
+                {{-- Appearance tab: enhanced UI theme toggle --}}
+                <a class="{{ request()->routeIs('settings.appearance') ? 'dark:text-white' : '' }}" {{ wireNavigate() }}
+                    href="{{ route('settings.appearance') }}">
+                    Appearance
+                </a>
             @endif
             <div class="flex-1"></div>
         </nav>
