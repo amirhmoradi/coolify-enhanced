@@ -82,7 +82,7 @@ COPY --chown=www-data:www-data src/Overrides/Views/livewire/project/service/conf
 COPY --chown=www-data:www-data src/Overrides/Views/components/server/sidebar.blade.php \
     /var/www/html/resources/views/components/server/sidebar.blade.php
 
-# Override settings navbar to add Restore + Templates + Appearance tabs
+# Override settings navbar to add Restore + Templates + Networks + Appearance tabs
 COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.blade.php \
     /var/www/html/resources/views/components/settings/navbar.blade.php
 
