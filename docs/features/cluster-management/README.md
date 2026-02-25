@@ -126,6 +126,7 @@ Sidebar
 | GET | `/api/v1/clusters/{uuid}/services` | List services |
 | POST | `/api/v1/clusters/{uuid}/services/{id}/scale` | Scale service |
 | POST | `/api/v1/clusters/{uuid}/services/{id}/rollback` | Rollback service |
+| POST | `/api/v1/clusters/{uuid}/services/{id}/force-update` | Force update service |
 | GET | `/api/v1/clusters/{uuid}/services/{id}/tasks` | Get service tasks |
 | GET | `/api/v1/clusters/{uuid}/events` | Get cluster events |
 | GET | `/api/v1/clusters/{uuid}/visualizer` | Get visualizer data |

@@ -93,7 +93,7 @@
                                             </svg>
                                         </button>
                                         <button
-                                            wire:click.stop="forceUpdateService('{{ $service['id'] }}')"
+                                            wire:click.stop="forceUpdate('{{ $service['id'] }}')"
                                             wire:confirm="Force update will redistribute all tasks. Continue?"
                                             class="px-2 py-1 text-xs rounded bg-coolgray-300 text-neutral-300 hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
                                             title="Force Update">

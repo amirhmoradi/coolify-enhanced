@@ -26,6 +26,8 @@ class ClusterController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        Gate::authorize('viewAny', Cluster::class);
+
         $clusters = Cluster::ownedByTeam($this->teamId($request))
             ->with('managerServer')
             ->get();
@@ -319,6 +321,29 @@ class ClusterController extends Controller
     }
 
     /**
+     * Force update a service (redistribute tasks).
+     */
+    public function forceUpdateService(Request $request, string $uuid, string $serviceId): JsonResponse
+    {
+        $cluster = $this->findCluster($request, $uuid);
+        Gate::authorize('manageServices', $cluster);
+
+        try {
+            $result = $cluster->driver()->forceUpdateService($serviceId);
+
+            if (! $result) {
+                return response()->json(['message' => 'Failed to force update service.'], 500);
+            }
+
+            Cache::forget("cluster:{$cluster->id}:services");
+
+            return response()->json(['message' => 'Service force update initiated.']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to force update service: '.$e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get cluster events from the database with optional filters.
      *
      * Query params: type, since (unix timestamp), until (unix timestamp), limit (default 100, max 1000).
@@ -523,9 +548,16 @@ class ClusterController extends Controller
 
     /**
      * Get the current team ID from the authenticated user.
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException 403 when user has no current team
      */
     protected function teamId(Request $request): int
     {
-        return $request->user()->currentTeam()->id;
+        $team = $request->user()->currentTeam();
+        if (! $team) {
+            abort(403, 'No team selected. Please select a team to access clusters.');
+        }
+
+        return $team->id;
     }
 }

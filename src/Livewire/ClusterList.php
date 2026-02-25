@@ -19,13 +19,26 @@ class ClusterList extends Component
             abort(404);
         }
 
+        if (! currentTeam()) {
+            $this->dispatch('error', 'No team selected. Please select a team to view clusters.');
+
+            return;
+        }
+
         $this->loadClusters();
     }
 
     public function loadClusters(): void
     {
         try {
-            $this->clusters = Cluster::ownedByTeam(currentTeam()->id)
+            $team = currentTeam();
+            if (! $team) {
+                $this->clusters = [];
+
+                return;
+            }
+
+            $this->clusters = Cluster::ownedByTeam($team->id)
                 ->with('managerServer')
                 ->orderBy('name')
                 ->get()
@@ -40,9 +53,16 @@ class ClusterList extends Component
     {
         $this->authorize('create', Cluster::class);
 
+        $team = currentTeam();
+        if (! $team) {
+            $this->dispatch('error', 'No team selected.');
+
+            return;
+        }
+
         try {
             $detection = app(ClusterDetectionService::class);
-            $detected = $detection->detectClusters(currentTeam()->id);
+            $detected = $detection->detectClusters($team->id);
 
             if (count($detected) > 0) {
                 $this->dispatch('success', count($detected).' cluster(s) detected and registered.');
@@ -59,7 +79,14 @@ class ClusterList extends Component
     public function syncCluster(string $uuid): void
     {
         try {
-            $cluster = Cluster::ownedByTeam(currentTeam()->id)
+            $team = currentTeam();
+            if (! $team) {
+                $this->dispatch('error', 'No team selected.');
+
+                return;
+            }
+
+            $cluster = Cluster::ownedByTeam($team->id)
                 ->where('uuid', $uuid)
                 ->firstOrFail();
 
@@ -78,7 +105,14 @@ class ClusterList extends Component
     public function deleteCluster(string $uuid): void
     {
         try {
-            $cluster = Cluster::ownedByTeam(currentTeam()->id)
+            $team = currentTeam();
+            if (! $team) {
+                $this->dispatch('error', 'No team selected.');
+
+                return;
+            }
+
+            $cluster = Cluster::ownedByTeam($team->id)
                 ->where('uuid', $uuid)
                 ->firstOrFail();
 

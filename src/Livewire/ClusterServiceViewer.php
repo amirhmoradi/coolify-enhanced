@@ -147,7 +147,11 @@ class ClusterServiceViewer extends Component
     private function resolveCluster(): Cluster
     {
         if (! $this->clusterModel) {
-            $this->clusterModel = Cluster::ownedByTeam(currentTeam()->id)->findOrFail($this->clusterId);
+            $team = currentTeam();
+            if (! $team) {
+                throw new \RuntimeException('No team selected. Please select a team to view cluster details.');
+            }
+            $this->clusterModel = Cluster::ownedByTeam($team->id)->findOrFail($this->clusterId);
         }
 
         return $this->clusterModel;

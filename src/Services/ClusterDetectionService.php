@@ -18,8 +18,9 @@ class ClusterDetectionService
      */
     public function detectClusters(int $teamId): array
     {
+        // Coolify: Swarm manager is stored on related ServerSetting (settings relation), column is_swarm_manager.
         $managers = Server::where('team_id', $teamId)
-            ->whereHas('settings', fn ($q) => $q->where('is_swarm_manager', true))
+            ->whereRelation('settings', 'is_swarm_manager', true)
             ->get();
 
         $detected = [];
@@ -212,6 +213,8 @@ class ClusterDetectionService
     /**
      * Match discovered Swarm nodes to existing Coolify Server records by IP address.
      * Only links servers that belong to the same team and aren't already linked.
+     *
+     * Coolify stores the server's primary IP in Server.ip (string).
      */
     public function linkKnownServers(Cluster $cluster, $nodes): void
     {

@@ -126,6 +126,8 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\ApiAllowed::class, 'api.
         ->middleware('api.ability:write');
     Route::post('/clusters/{uuid}/services/{serviceId}/rollback', [ClusterController::class, 'rollbackService'])
         ->middleware('api.ability:write');
+    Route::post('/clusters/{uuid}/services/{serviceId}/force-update', [ClusterController::class, 'forceUpdateService'])
+        ->middleware('api.ability:write');
     Route::get('/clusters/{uuid}/events', [ClusterController::class, 'events'])
         ->middleware('api.ability:read');
     Route::get('/clusters/{uuid}/visualizer', [ClusterController::class, 'visualizer'])
