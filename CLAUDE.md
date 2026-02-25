@@ -24,6 +24,7 @@ This is a Laravel package that extends Coolify v4 with three main features:
 5. **Enhanced Database Classification** — Expanded database image detection list and `coolify.database` label/`# type: database` comment convention for explicit service classification
 6. **Network Management** — Per-environment Docker network isolation, shared networks, dedicated proxy network, server-level management UI, and per-resource network assignment
 7. **MCP Server** — Model Context Protocol server enabling AI assistants (Claude Desktop, Cursor, VS Code) to manage Coolify infrastructure via natural language
+8. **Cluster Management** — Comprehensive Docker Swarm cluster dashboard, node management, service/task monitoring, cluster visualizer, Swarm secrets/configs, and structured deployment configuration with K8s-ready abstraction layer
 
 It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption and backup features, modified Coolify files are overlaid in the Docker image. The MCP server is a standalone TypeScript/Node.js package in `mcp-server/`.
 
@@ -198,6 +199,38 @@ MCP Server (@amirhmoradi/coolify-enhanced-mcp)
 Coolify Instance (with optional coolify-enhanced addon)
 ```
 
+### Cluster Management Architecture
+
+Comprehensive Docker Swarm cluster management with a K8s-ready orchestrator abstraction layer. See `docs/features/cluster-management/` for full PRD, plan, and README.
+
+- **Orchestrator abstraction**: `ClusterDriverInterface` contract with `SwarmClusterDriver` implementation. Future `KubernetesClusterDriver` can be added without rewriting UI/business logic
+- **Explicit Cluster model**: New `Cluster` Eloquent model (not implicit server grouping). Auto-detected from Swarm manager servers via `docker info`, linked to servers via `server.cluster_id` FK
+- **SSH-based Docker CLI**: Uses Coolify's `instant_remote_process()` for all Docker commands. JSON output format (`--format '{{json .}}'`) for reliable parsing
+- **Cached with TTL**: All Docker queries cached (default 30s) to prevent SSH storms on dashboard page loads. Explicit cache invalidation on write operations
+- **Team-scoped**: Clusters belong to teams, inheriting Coolify's multi-tenancy model
+- **Feature flag**: `COOLIFY_CLUSTER_MANAGEMENT=true` to enable
+
+**Key components:**
+- `ClusterDashboard` — Status cards + node table + tabs (Overview, Services, Visualizer, Events)
+- `ClusterServiceViewer` — Service table with inline task expansion
+- `ClusterVisualizer` — Dual view: column-per-node task grid (Portainer-style) + interactive topology map
+- `ClusterNodeManager` — Node actions: drain/activate/pause, promote/demote, label management
+- `SwarmConfigForm` — Structured form replacing Coolify's raw YAML textarea for Swarm deployment config
+- `ClusterSecrets` / `ClusterConfigs` — Docker Swarm primitives management
+
+**Data flow:**
+```
+UI Component → Cluster::driver() → SwarmClusterDriver
+  → instant_remote_process(["docker node ls --format '{{json .}}'"], $managerServer)
+  → JSON parse → Cache → Return to UI
+```
+
+**Phase breakdown:**
+1. Phase 1: Read-only dashboard + node visibility + service/task viewer + visualizer (zero overlays)
+2. Phase 2: Node management + service operations + structured Swarm config (one overlay: swarm.blade.php)
+3. Phase 3: Secrets/configs CRUD + event persistence
+4. Phase 4: Resource↔service linking + alerts + MCP tools
+
 ## Quick Reference
 
 ### Package Structure
@@ -210,7 +243,9 @@ coolify-enhanced/
 │   │   ├── PermissionService.php              # Core permission logic
 │   │   ├── RcloneService.php                  # Rclone encryption commands
 │   │   ├── TemplateSourceService.php          # GitHub template fetch & parse
-│   │   └── NetworkService.php                 # Docker network operations + reconciliation
+│   │   ├── NetworkService.php                 # Docker network operations + reconciliation
+│   │   ├── ClusterService.php                 # High-level cluster operations
+│   │   └── ClusterDetectionService.php        # Auto-detection of Swarm clusters
 │   ├── Models/
 │   │   ├── ProjectUser.php                    # Project access pivot
 │   │   ├── EnvironmentUser.php                # Environment override pivot
@@ -218,9 +253,17 @@ coolify-enhanced/
 │   │   ├── ScheduledResourceBackupExecution.php # Resource backup execution model
 │   │   ├── CustomTemplateSource.php           # Custom GitHub template source
 │   │   ├── ManagedNetwork.php                 # Docker network model
-│   │   └── ResourceNetwork.php               # Resource-network pivot model
+│   │   ├── ResourceNetwork.php               # Resource-network pivot model
+│   │   ├── Cluster.php                        # Cluster entity model
+│   │   ├── ClusterEvent.php                   # Cluster event log model
+│   │   ├── SwarmSecret.php                    # Swarm secret tracking model
+│   │   └── SwarmConfig.php                    # Swarm config tracking model
 │   ├── Traits/
 │   │   └── HasS3Encryption.php                # S3 encryption helpers for model
+│   ├── Contracts/
+│   │   └── ClusterDriverInterface.php         # Orchestrator abstraction interface
+│   ├── Drivers/
+│   │   └── SwarmClusterDriver.php             # Docker Swarm driver implementation
 │   ├── Policies/                              # Laravel policies (override Coolify's)
 │   │   ├── ApplicationPolicy.php
 │   │   ├── DatabasePolicy.php
@@ -229,7 +272,8 @@ coolify-enhanced/
 │   │   ├── ProjectPolicy.php
 │   │   ├── ServerPolicy.php
 │   │   ├── ServicePolicy.php
-│   │   └── NetworkPolicy.php
+│   │   ├── NetworkPolicy.php
+│   │   └── ClusterPolicy.php
 │   ├── Scopes/                                # Eloquent global scopes
 │   │   ├── ProjectPermissionScope.php
 │   │   └── EnvironmentPermissionScope.php
@@ -271,13 +315,16 @@ coolify-enhanced/
 │   │   ├── ResourceBackupJob.php              # Volume/config/full backup job
 │   │   ├── SyncTemplateSourceJob.php          # Background GitHub template sync
 │   │   ├── NetworkReconcileJob.php            # Post-deploy network reconciliation
-│   │   └── ProxyMigrationJob.php             # Proxy isolation migration for existing servers
+│   │   ├── ProxyMigrationJob.php             # Proxy isolation migration for existing servers
+│   │   ├── ClusterSyncJob.php                # Background cluster metadata sync
+│   │   └── ClusterEventCollectorJob.php      # Event stream collection
 │   ├── Http/
 │   │   ├── Controllers/Api/                   # API controllers
 │   │   │   ├── CustomTemplateSourceController.php # Template source management API
 │   │   │   ├── PermissionsController.php      # Permission management API
 │   │   │   ├── ResourceBackupController.php   # Resource backup API
-│   │   │   └── NetworkController.php          # Network management API
+│   │   │   ├── NetworkController.php          # Network management API
+│   │   │   └── ClusterController.php         # Cluster management API
 │   │   └── Middleware/
 │   │       └── InjectPermissionsUI.php        # UI injection middleware
 │   └── Livewire/
@@ -290,7 +337,18 @@ coolify-enhanced/
 │       ├── NetworkManager.php                 # Server-level network management
 │       ├── NetworkManagerPage.php             # Server networks full-page wrapper
 │       ├── ResourceNetworks.php               # Per-resource network assignment
-│       └── NetworkSettings.php                # Settings page for network policies
+│       ├── NetworkSettings.php                # Settings page for network policies
+│       ├── ClusterList.php                    # Cluster listing page
+│       ├── ClusterDashboard.php               # Cluster dashboard with tabs
+│       ├── ClusterNodeManager.php             # Node management with actions
+│       ├── ClusterAddNode.php                 # Add node wizard
+│       ├── ClusterServiceViewer.php           # Service/task viewer
+│       ├── ClusterVisualizer.php              # Dual-view cluster visualizer
+│       ├── ClusterEvents.php                  # Event log viewer
+│       ├── ClusterSecrets.php                 # Swarm secrets CRUD
+│       ├── ClusterConfigs.php                 # Swarm configs CRUD
+│       ├── SwarmConfigForm.php                # Structured Swarm deployment config
+│       └── SwarmTaskStatus.php                # Inline task status for resources
 ├── database/migrations/                        # Database migrations
 ├── resources/views/livewire/
 │   ├── access-matrix.blade.php                # Matrix table view
@@ -302,7 +360,18 @@ coolify-enhanced/
 │   ├── network-manager.blade.php             # Server network management view
 │   ├── network-manager-page.blade.php        # Server networks full-page view
 │   ├── resource-networks.blade.php           # Per-resource network assignment view
-│   └── network-settings.blade.php            # Network policies settings view
+│   ├── network-settings.blade.php            # Network policies settings view
+│   ├── cluster-list.blade.php               # Cluster listing page view
+│   ├── cluster-dashboard.blade.php          # Cluster dashboard with tabs view
+│   ├── cluster-node-manager.blade.php       # Node management view
+│   ├── cluster-add-node.blade.php           # Add node wizard view
+│   ├── cluster-service-viewer.blade.php     # Service/task viewer view
+│   ├── cluster-visualizer.blade.php         # Dual-view visualizer
+│   ├── cluster-events.blade.php             # Event log view
+│   ├── cluster-secrets.blade.php            # Secrets management view
+│   ├── cluster-configs.blade.php            # Configs management view
+│   ├── swarm-config-form.blade.php          # Structured Swarm config form
+│   └── swarm-task-status.blade.php          # Inline task status view
 ├── routes/                                     # API and web routes
 ├── config/                                     # Package configuration
 ├── docker/                                     # Docker build files
@@ -413,6 +482,18 @@ coolify-enhanced/
 | `mcp-server/src/lib/types.ts` | TypeScript type definitions for all API types |
 | `mcp-server/src/tools/*.ts` | 14 tool modules (99 tools total) |
 | `mcp-server/package.json` | npm package: @amirhmoradi/coolify-enhanced-mcp |
+| `src/Contracts/ClusterDriverInterface.php` | Orchestrator abstraction interface (K8s-ready) |
+| `src/Drivers/SwarmClusterDriver.php` | Docker Swarm driver: SSH-based Docker CLI execution |
+| `src/Models/Cluster.php` | Cluster entity: uuid, name, type, status, settings, metadata |
+| `src/Services/ClusterDetectionService.php` | Auto-detect Swarm clusters from manager servers |
+| `src/Jobs/ClusterSyncJob.php` | Periodic cluster metadata refresh |
+| `src/Jobs/ClusterEventCollectorJob.php` | Docker event stream collection |
+| `src/Livewire/ClusterDashboard.php` | Main cluster dashboard with tabs |
+| `src/Livewire/ClusterVisualizer.php` | Dual-view visualizer (grid + topology) |
+| `src/Livewire/ClusterNodeManager.php` | Node management with drain/promote/label actions |
+| `src/Livewire/SwarmConfigForm.php` | Structured Swarm deployment config (replaces YAML textarea) |
+| `src/Http/Controllers/Api/ClusterController.php` | Cluster management REST API |
+| `src/Policies/ClusterPolicy.php` | Cluster access policy (team-scoped) |
 
 ### Development Commands
 
@@ -570,6 +651,17 @@ Two approaches are used to add UI components to Coolify pages:
 76. **MCP enhanced feature detection** — The server probes `GET /api/v1/resource-backups` on startup. 200 or 401/403 means enhanced is available (endpoint exists). 404 means standard Coolify.
 77. **MCP server stderr for logging** — MCP servers must use `console.error()` for logging because `console.log()` / stdout is reserved for the JSON-RPC protocol communication.
 78. **MCP CoolifyClient health check path** — The health endpoint is at `/health` (not `/api/v1/health`). The client uses `/../health` relative path to escape the `/api/v1` prefix.
+79. **Cluster auto-detection uses `docker info --format json`** — The Swarm ID from `docker info` is used to match/create Cluster records. Worker nodes are auto-linked by IP matching against known Coolify Server records.
+80. **ClusterDriverInterface is the K8s abstraction** — All UI and business logic goes through this interface. Never call Docker commands directly from Livewire components; always go through the driver.
+81. **Cluster data is cached aggressively** — Default 30s TTL for node/service lists, 60s for cluster info. Write operations (drain, scale) must explicitly invalidate cache via `Cache::forget("cluster:{id}:{resource}")`.
+82. **escapeshellarg() on ALL Docker CLI arguments** — Node IDs, service IDs, label keys/values — everything interpolated into shell commands MUST be escaped. The SwarmClusterDriver has a private `escape()` helper.
+83. **Join tokens are stored encrypted** — Cluster settings use `'encrypted:array'` cast. Tokens are never exposed in API responses unless explicitly requested by admin users.
+84. **Coolify's existing `swarm_cluster` integer field coexists** — We add a proper `cluster_id` FK to servers. The old integer field is not removed or migrated to avoid breaking Coolify core.
+85. **Phase 1 requires ZERO overlay files** — Full cluster visibility (dashboard, nodes, services, visualizer) with no Coolify file modifications. Phase 2 adds ONE overlay (swarm.blade.php) for the structured config form.
+86. **`instant_remote_process()` is Coolify's SSH executor** — All Docker commands go through this function. It manages SSH connections, timeouts, and error handling. Never use `ssh` directly.
+87. **Swarm secrets are immutable in Docker** — "Rotating" a secret means: create new secret, update all referencing services, remove old secret. This is a multi-step operation, not a simple update.
+88. **`docker system events` has time bounds** — Always use `--since` and `--until` to bound event queries. Without `--until`, the command blocks indefinitely waiting for new events.
+89. **Swarm node inspect returns NanoCPUs** — CPU count from `docker node inspect` is in nanoseconds (1 CPU = 1e9 NanoCPUs). Divide by 1e9 for core count.
 
 ## Important Notes
 
@@ -592,6 +684,9 @@ Two approaches are used to add UI components to Coolify pages:
 17. **MCP server** - Standalone TypeScript MCP server in `mcp-server/`. Wraps all ~105 Coolify API endpoints + coolify-enhanced endpoints as MCP tools. Published as `@amirhmoradi/coolify-enhanced-mcp`
 18. **MCP auto-detection** - Enhanced tools are auto-registered when coolify-enhanced API is detected, or forced via `COOLIFY_ENHANCED=true` env var
 19. **MCP works with standard Coolify** - Core tools (72 tools) work with any Coolify v4 instance. Enhanced tools (27 tools) require the coolify-enhanced addon
+20. **Cluster management** - Docker Swarm cluster dashboard, node management, service/task monitoring, visualizer via `COOLIFY_CLUSTER_MANAGEMENT=true`
+21. **Cluster management is phased** - Phase 1: read-only visibility (zero overlays). Phase 2: write operations (one overlay). Phase 3: secrets/configs. Phase 4: integration + MCP
+22. **K8s-ready architecture** - `ClusterDriverInterface` contract decouples UI from orchestrator. Implement `KubernetesClusterDriver` to add K8s support without touching any UI code
 
 ## See Also
 
@@ -599,6 +694,7 @@ Two approaches are used to add UI components to Coolify pages:
 - [docs/custom-templates.md](docs/custom-templates.md) - Custom template creation guide
 - [docs/features/](docs/features/) - Per-feature documentation (PRD, plan, README)
 - [docs/features/mcp-server/](docs/features/mcp-server/) - MCP server feature documentation
+- [docs/features/cluster-management/](docs/features/cluster-management/) - Cluster management feature documentation (PRD, plan, README)
 - [mcp-server/README.md](mcp-server/README.md) - MCP server usage and tool reference
 - [docs/coolify-source/](docs/coolify-source/) - Coolify source code reference
 - [docs/architecture.md](docs/architecture.md) - Architecture details

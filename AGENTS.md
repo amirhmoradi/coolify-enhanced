@@ -21,8 +21,10 @@ This is a **Laravel package** that extends Coolify v4 with:
 4. **Custom Template Sources** — External GitHub repositories as sources for docker-compose service templates
 5. **Enhanced Database Classification** — Expanded database image detection, `coolify.database` Docker label, `# type: database` comment convention, wire-compatible backup support, and expanded port mapping
 6. **Network Management** — Per-environment Docker network isolation, shared networks, dedicated proxy network, server-level management UI, per-resource network assignment, and Docker Swarm overlay support
+7. **MCP Server** — Model Context Protocol server enabling AI assistants to manage Coolify infrastructure via natural language
+8. **Cluster Management** — Docker Swarm cluster dashboard, node management, service/task monitoring, cluster visualizer, Swarm secrets/configs, structured deployment config, and K8s-ready abstraction layer
 
-It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption, backup, classification, template, and network features, modified Coolify files are overlaid in the Docker image.
+It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption, backup, classification, template, and network features, modified Coolify files are overlaid in the Docker image. The MCP server is a standalone TypeScript/Node.js package in `mcp-server/`.
 
 ### Network Management Architecture
 
@@ -289,6 +291,53 @@ buildCleanupCommands(string $containerName): string
 - Directory name encryption toggle (disabled when filename encryption is off)
 - Warning about password loss
 - Saves settings to S3Storage model
+
+### Cluster Management Architecture
+
+Comprehensive Docker Swarm cluster management with a K8s-ready orchestrator abstraction layer. Feature flag: `COOLIFY_CLUSTER_MANAGEMENT=true`.
+
+**Key files:**
+- `src/Contracts/ClusterDriverInterface.php` — Orchestrator abstraction (K8s-ready)
+- `src/Drivers/SwarmClusterDriver.php` — Docker Swarm implementation (SSH + Docker CLI)
+- `src/Models/Cluster.php` — Cluster entity (uuid, name, type, status, settings, metadata)
+- `src/Services/ClusterDetectionService.php` — Auto-detect Swarm clusters from manager servers
+- `src/Jobs/ClusterSyncJob.php` — Periodic cluster metadata refresh
+- `src/Livewire/ClusterDashboard.php` — Main dashboard (overview, services, visualizer, events tabs)
+- `src/Livewire/ClusterVisualizer.php` — Dual-view: column-per-node grid + topology map
+- `src/Livewire/ClusterNodeManager.php` — Node actions: drain/activate, promote/demote, labels
+- `src/Livewire/SwarmConfigForm.php` — Structured Swarm config (replaces YAML textarea)
+- `src/Http/Controllers/Api/ClusterController.php` — REST API
+
+**Critical patterns:**
+- **Orchestrator abstraction**: ALL Docker commands go through `ClusterDriverInterface`. Never call Docker directly from UI components. Future `KubernetesClusterDriver` implements same interface.
+- **SSH execution**: Uses Coolify's `instant_remote_process()` for all Docker CLI commands. JSON output parsing (`--format '{{json .}}'`).
+- **Command injection prevention**: `escapeshellarg()` on ALL interpolated CLI arguments (node IDs, label keys/values, service IDs).
+- **Caching**: Node/service lists cached 30s, cluster info 60s. Write operations (drain, scale) must call `Cache::forget("cluster:{id}:{resource}")`.
+- **Auto-detection**: `docker info --format json` on Swarm managers → extract Swarm ID → find-or-create Cluster → link servers by IP matching.
+- **Team-scoped**: Clusters belong to teams. All queries use `Cluster::ownedByTeam(currentTeam()->id)`.
+- **Encrypted secrets**: Join tokens in `Cluster.settings` use `'encrypted:array'` cast. Never exposed in API responses.
+- **Phase 1 = zero overlays**: Full cluster visibility without any Coolify file modifications.
+
+**Data model:**
+```
+Cluster (type: swarm|kubernetes)
+├── manager_server_id → Server (primary Swarm manager)
+├── team_id → Team
+├── settings (encrypted: join tokens, sync config)
+├── metadata (cached: swarm_id, node/service counts)
+├── servers() → Server[] (via server.cluster_id FK)
+├── events() → ClusterEvent[]
+└── driver() → ClusterDriverInterface (SwarmClusterDriver for Swarm type)
+```
+
+**Coolify Swarm source reference:**
+- `Server.php`: `isSwarm()`, `isSwarmManager()`, `isSwarmWorker()` methods, `swarm_cluster` integer field
+- `SwarmDocker.php`: Polymorphic destination model for Swarm resources (104 lines)
+- `Application.php`: `swarm_replicas`, `swarm_placement_constraints` (base64 YAML)
+- `docker.php` helpers: `getContainerStatus()` branches on `$server->isSwarm()` to use `docker service ls`
+- `ApplicationDeploymentJob.php`: Uses `docker stack deploy` for Swarm destinations
+
+See `docs/features/cluster-management/` for full PRD, implementation plan, and README.
 
 ### Overlay Files (Overrides)
 
