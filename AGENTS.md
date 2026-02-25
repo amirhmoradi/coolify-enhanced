@@ -744,6 +744,7 @@ PermissionService::grantEnvironmentAccess($user, $environment, 'view_only');
 27. **Multi-port `proxy_ports` JSON** — Schema: `{"7687": {"public_port": 17687, "label": "bolt", "enabled": true}, ...}`. Keys are internal port strings. Initialized from label defaults on first Livewire component mount.
 28. **Service/Index.php overlay size** — ~560 lines, full copy of Coolify's original. Multi-port changes are marked with `[MULTI-PORT PROXY OVERLAY]` comments. Keep in sync with upstream.
 29. **Multi-port nginx** — `StartDatabaseProxy::handleMultiPort()` generates multiple `server` blocks in one nginx `stream` context. All ports share one proxy container. `StopDatabaseProxy` needs no changes (just `docker rm -f`).
+30. **Cluster web routes must precede Coolify's catch-all** — Coolify's `routes/web.php` ends with `Route::any('/{any}', ...)` redirecting to HOME. If package web routes are loaded in `boot()` after `RouteServiceProvider::boot()`, `GET /clusters` and `GET /cluster/{uuid}` match the catch-all and cause "too many redirects". Load web routes in `register()` when enabled so they are registered before any provider's `boot()`. See `docs/features/cluster-management/REDIRECT_LOOP_INVESTIGATION.md`.
 
 ## Coolify Source Reference
 

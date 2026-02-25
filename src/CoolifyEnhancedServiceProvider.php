@@ -23,6 +23,16 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/coolify-enhanced.php', 'coolify-enhanced');
+
+        // Load web routes during register() so they are registered before Coolify's
+        // RouteServiceProvider::boot() adds its catch-all Route::any('/{any}', ...).
+        // Laravel matches routes in registration order; if our routes are added after
+        // the catch-all, GET /clusters and GET /cluster/{uuid} would match the
+        // catch-all and redirect to HOME, causing "too many redirects" when cluster
+        // management is enabled. See docs/features/cluster-management/REDIRECT_LOOP_INVESTIGATION.md
+        if (config('coolify-enhanced.enabled', false)) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        }
     }
 
     /**
@@ -38,9 +48,8 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'coolify-enhanced');
 
-        // Load routes
+        // Load API routes (web routes are loaded in register() to precede Coolify's catch-all)
         $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
-        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
         // Register Livewire components
         $this->registerLivewireComponents();

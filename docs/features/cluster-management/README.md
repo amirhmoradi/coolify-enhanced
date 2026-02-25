@@ -168,6 +168,10 @@ COOLIFY_CLUSTER_EVENT_RETENTION=7         # Event retention (days)
 | Cached with configurable TTL | Prevents SSH storm on dashboards |
 | Team-scoped clusters | Inherits Coolify's multi-tenancy |
 
+## Troubleshooting
+
+- **"Too many redirects" when cluster management is enabled (non-Swarm node)** — Coolify's catch-all route can match `/clusters` and `/cluster/{uuid}` if package web routes are registered after it. See [REDIRECT_LOOP_INVESTIGATION.md](REDIRECT_LOOP_INVESTIGATION.md) for root cause and fix. Use [VALIDATION_ACTION_PLAN.md](VALIDATION_ACTION_PLAN.md) to validate after applying the fix.
+
 ## Related Documentation
 
 - [PRD.md](PRD.md) — Full product requirements with UX mockups
