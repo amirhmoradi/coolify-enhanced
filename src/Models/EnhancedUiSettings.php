@@ -61,6 +61,28 @@ class EnhancedUiSettings extends Model
         Cache::forget(self::cacheKey($key));
     }
 
+    /**
+     * Check whether the enhanced UI theme is active.
+     *
+     * Returns true only when the package is enabled AND the DB/config
+     * flag is on.  Safe to call from Blade views — catches DB errors
+     * (e.g. table not yet migrated) and falls back to config value.
+     */
+    public static function isThemeEnabled(): bool
+    {
+        if (! config('coolify-enhanced.enabled', false)) {
+            return false;
+        }
+
+        $default = (bool) config('coolify-enhanced.ui_theme.enabled', false);
+
+        try {
+            return (bool) static::get('enhanced_theme_enabled', $default);
+        } catch (\Throwable $e) {
+            return $default;
+        }
+    }
+
     protected static function cacheKey(string $key): string
     {
         return 'enhanced_ui_settings:'.$key;

@@ -73,7 +73,7 @@
         <script type="text/javascript" src="{{ URL::asset('js/purify.min.js') }}"></script>
     @endauth
     {{-- Coolify Enhanced: Optional enhanced UI theme (CSS + minimal JS) --}}
-    @if(function_exists('enhanced_theme_enabled') && enhanced_theme_enabled())
+    @if(class_exists('AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings') && \AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings::isThemeEnabled())
     <link rel="stylesheet" href="{{ asset('vendor/coolify-enhanced/theme.css') }}">
     <script>
     (function(){ document.documentElement.setAttribute('data-ce-theme', 'enhanced'); })();
