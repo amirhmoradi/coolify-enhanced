@@ -167,6 +167,11 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
             'enhanced::network-settings',
             \AmirhMoradi\CoolifyEnhanced\Livewire\NetworkSettings::class
         );
+
+        Livewire::component(
+            'enhanced::appearance-settings',
+            \AmirhMoradi\CoolifyEnhanced\Livewire\AppearanceSettings::class
+        );
     }
 
     /**
