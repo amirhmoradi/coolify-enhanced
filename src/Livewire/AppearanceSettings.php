@@ -6,15 +6,11 @@ use AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
-/**
- * Settings page for enhanced UI theme (Appearance).
- *
- * Allows instance admins to enable or disable the optional corporate-grade
- * modern UI theme. Stored in enhanced_ui_settings; disabled by default.
- */
 class AppearanceSettings extends Component
 {
-    public bool $enhancedThemeEnabled = false;
+    public ?string $activeTheme = null;
+
+    public array $availableThemes = [];
 
     public function mount(): void
     {
@@ -26,14 +22,14 @@ class AppearanceSettings extends Component
             abort(403);
         }
 
-        $default = (bool) config('coolify-enhanced.ui_theme.enabled', false);
-        $this->enhancedThemeEnabled = (bool) EnhancedUiSettings::get('enhanced_theme_enabled', $default);
+        $this->activeTheme = EnhancedUiSettings::getActiveTheme();
+        $this->availableThemes = EnhancedUiSettings::getAvailableThemes();
     }
 
-    public function saveEnhancedTheme(): void
+    public function saveTheme(): void
     {
-        EnhancedUiSettings::set('enhanced_theme_enabled', $this->enhancedThemeEnabled);
-        $this->dispatch('success', $this->enhancedThemeEnabled ? 'Enhanced theme enabled. Reload the page to see changes.' : 'Enhanced theme disabled. Reload the page to see changes.');
+        EnhancedUiSettings::setActiveTheme($this->activeTheme ?: null);
+        $this->dispatch('success', 'Theme updated. Reload the page to see changes.');
     }
 
     public function render(): View

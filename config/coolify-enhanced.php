@@ -191,6 +191,22 @@ return [
     |
     */
     'ui_theme' => [
-        'enabled' => env('COOLIFY_ENHANCED_UI_THEME', false),
+        'default' => env('COOLIFY_ENHANCED_UI_THEME', null),
+        'themes' => [
+            'enhanced' => [
+                'label' => 'Enhanced (Linear)',
+                'description' => 'Deep neutrals, crisp borders, restrained accent usage. Inspired by Linear.',
+                'css' => 'themes/enhanced.css',
+                'js' => null,
+                'font_label' => null,
+            ],
+            'tailadmin' => [
+                'label' => 'TailAdmin',
+                'description' => 'Clean enterprise dashboard with brand blues, warm grays, and polished form controls. Inspired by TailAdmin.',
+                'css' => 'themes/tailadmin.css',
+                'js' => 'themes/tailadmin.js',
+                'font_label' => 'Outfit',
+            ],
+        ],
     ],
 ];

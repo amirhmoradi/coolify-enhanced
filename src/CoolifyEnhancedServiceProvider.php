@@ -69,9 +69,8 @@ class CoolifyEnhancedServiceProvider extends ServiceProvider
             __DIR__.'/../resources/views' => resource_path('views/vendor/coolify-enhanced'),
         ], 'coolify-enhanced-views');
 
-        // Publish enhanced UI theme CSS (for local/dev when not using Docker)
         $this->publishes([
-            __DIR__.'/../resources/assets/theme.css' => public_path('vendor/coolify-enhanced/theme.css'),
+            __DIR__.'/../resources/assets/themes' => public_path('vendor/coolify-enhanced/themes'),
         ], 'coolify-enhanced-theme');
 
         // Register global scopes to filter resources based on permissions

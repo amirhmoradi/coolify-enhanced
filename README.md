@@ -26,7 +26,7 @@ Coolify v4 is an excellent self-hosted PaaS, but ships with a few limitations fo
 | **Network isolation** | All containers share a single flat Docker network | Per-environment bridge networks, dedicated proxy network, cross-env shared networks, Docker Swarm overlay support |
 | **MCP Server (AI Assistant Integration)** | None | 119+ MCP tools covering all Coolify (and Coolify Enhanced) API endpoints |
 | **Cluster management** | Checkbox-only Swarm config, no dashboard, no node management | Full cluster dashboard, node management, service/task viewer, visualizer, secrets/configs, structured deploy config |
-| **UI theme** | Single default look | Optional corporate-grade modern theme (light/dark) — Settings > Appearance, off by default |
+| **UI theme** | Single default look | Multiple selectable themes — Default (Coolify), Enhanced (Linear), TailAdmin — Settings > Appearance; stock Coolify by default |
 
 
 All features are **independent** — enable only what you need. When disabled, Coolify behaves exactly as stock.
@@ -126,10 +126,10 @@ All features are **independent** — enable only what you need. When disabled, C
 - **Status notifications** — alerts when clusters degrade or become unreachable
 
 ### Enhanced UI Theme
-- **Optional corporate-grade theme** — modern, sophisticated color palette; light and dark modes
-- **CSS and minimal JS only** — no structural changes; same layout and framework (Tailwind)
-- **Settings > Appearance** — single toggle "Use enhanced theme"; **disabled by default**
-- **Instance-wide** — preference stored in database; reload the page after toggling to see changes
+- **Multiple selectable themes** — Default (Coolify), Enhanced (Linear), TailAdmin
+- **CSS-only** — no DOM changes; same layout and framework (Tailwind); fonts self-hosted (WOFF2 in image)
+- **Settings > Appearance** — theme dropdown; **Default (Coolify)** by default
+- **Instance-wide** — admin-controlled; preference stored in database; reload after changing to see updates
 
 ### MCP Server (AI Assistant Integration)
 - **119+ MCP tools** wrapping all Coolify API endpoints for AI-driven infrastructure management
@@ -857,13 +857,16 @@ See the full [Cluster Management documentation](docs/features/cluster-management
 
 ### 9. Enhanced UI Theme
 
-An optional corporate-grade modern UI theme with a refined color palette and light/dark modes. **No structural changes** — CSS and minimal JavaScript only; same layout and Tailwind framework.
+Optional corporate-grade themes selectable via **Settings > Appearance**. **CSS-only** — no DOM changes; same layout and Tailwind framework. Themes are instance-wide (admin-controlled); fonts are self-hosted (WOFF2 bundled in Docker image).
 
-- **Settings > Appearance** — single toggle "Use enhanced theme"; **disabled by default**.
-- **Instance-wide** — preference stored in the database; reload the page after toggling to see changes.
-- **Design direction** — Linear-inspired modern SaaS system with restrained accent usage and high-contrast hierarchy.
-- **Light mode** — clean enterprise surfaces (`#F5F7FB` base) with crisp borders.
-- **Dark mode** — deep neutrals (`#080B12` base) with layered surfaces for clarity.
+**Available themes:**
+- **Default (Coolify)** — stock Coolify styling (no theme applied)
+- **Enhanced (Linear)** — deep neutrals, crisp borders, restrained accent usage; inspired by Linear
+- **TailAdmin** — clean enterprise dashboard with brand blues, warm grays, Outfit font; inspired by TailAdmin
+
+Preference is stored in the database; reload the page after changing themes to see updates.
+
+**Adding custom themes:** Create a CSS file in `resources/assets/themes/`, add an entry to the `ui_theme.themes` array in `config/coolify-enhanced.php`, self-host any fonts in `resources/assets/themes/fonts/`, and rebuild the Docker image.
 
 See [Enhanced UI Theme](docs/features/enhanced-ui-theme/README.md) for feature overview, and [PRD](docs/features/enhanced-ui-theme/PRD.md) / [plan](docs/features/enhanced-ui-theme/plan.md) for full implementation details.
 
@@ -964,6 +967,7 @@ For detailed instructions including manual install, database migrations, and tro
 | `COOLIFY_CLUSTER_SYNC_INTERVAL` | `60` | Cluster metadata sync interval in seconds |
 | `COOLIFY_CLUSTER_CACHE_TTL` | `30` | Docker API response cache TTL in seconds |
 | `COOLIFY_CLUSTER_EVENT_RETENTION` | `7` | Cluster event log retention in days |
+| `COOLIFY_ENHANCED_UI_THEME` | — | Default theme slug when no DB value exists (e.g., `enhanced`, `tailadmin`); acts as fallback for Settings > Appearance |
 
 > For backward compatibility, `COOLIFY_GRANULAR_PERMISSIONS=true` also enables the addon.
 

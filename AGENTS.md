@@ -23,7 +23,7 @@ This is a **Laravel package** that extends Coolify v4 with:
 6. **Network Management** — Per-environment Docker network isolation, shared networks, dedicated proxy network, server-level management UI, per-resource network assignment, and Docker Swarm overlay support
 7. **MCP Server** — Model Context Protocol server enabling AI assistants to manage Coolify infrastructure via natural language
 8. **Cluster Management** — Docker Swarm cluster dashboard, node management, service/task monitoring, cluster visualizer, Swarm secrets/configs, structured deployment config, and K8s-ready abstraction layer
-9. **Enhanced UI Theme** — Optional corporate-grade modern UI theme (CSS + minimal JS only); Settings > Appearance toggle; disabled by default; preference in `enhanced_ui_settings` table
+9. **Enhanced UI Theme** — Optional corporate-grade UI themes (CSS + minimal JS only); multiple selectable themes (Linear-inspired, TailAdmin-inspired); Settings > Appearance dropdown; disabled by default; `active_theme` slug in `enhanced_ui_settings` table
 
 It does NOT modify Coolify directly but extends it via Laravel's service provider and policy override system. For encryption, backup, classification, template, and network features, modified Coolify files are overlaid in the Docker image. The MCP server is a standalone TypeScript/Node.js package in `mcp-server/`.
 
@@ -51,16 +51,17 @@ See `docs/features/network-management/` for PRD, implementation plan, and featur
 
 ### Enhanced UI Theme Architecture
 
-Optional corporate-grade theme applied via scoped CSS (`[data-ce-theme="enhanced"]`) when the user enables it in Settings > Appearance. The current design language is Linear-inspired (deep neutrals, crisp borders, restrained accent usage). No structural changes; one base layout overlay injects theme stylesheet and script.
+Multi-theme system: theme registry in config (`ui_theme.themes`) with metadata (label, description, css path, font_label). `getActiveTheme()` / `setActiveTheme()` replace single boolean; empty slug = no theme. Per-theme CSS in `resources/assets/themes/` (e.g., `enhanced.css`, `tailadmin.css`). Self-hosted fonts via `@font-face` in theme CSS (e.g., Outfit WOFF2 in `themes/fonts/outfit/` for TailAdmin). Settings > Appearance uses dropdown selector. Base layout overlay loads CSS dynamically by active slug and sets `data-ce-theme` attribute. Two bundled themes: "enhanced" (Linear-inspired) and "tailadmin" (TailAdmin-inspired).
 
 **Key files:**
-- `src/Models/EnhancedUiSettings.php` — Key-value store for `enhanced_theme_enabled`
-- `src/Livewire/AppearanceSettings.php` — Settings > Appearance page with toggle; `instantSave="saveEnhancedTheme"`
-- `src/Overrides/Views/layouts/base.blade.php` — Full copy of Coolify base; conditional theme link + `data-ce-theme` script
-- `resources/assets/theme.css` — Scoped overrides for light and dark modes
-- Global helper `enhanced_theme_enabled()` — Used by base layout overlay; returns false if package is disabled and uses DB value with config fallback (`coolify-enhanced.ui_theme.enabled`)
+- `src/Models/EnhancedUiSettings.php` — Key-value store for `active_theme` slug
+- `src/Livewire/AppearanceSettings.php` — Settings > Appearance page with theme dropdown; `saveActiveTheme()`
+- `src/Overrides/Views/layouts/base.blade.php` — Full copy of Coolify base; dynamic theme CSS link + `data-ce-theme` script
+- `resources/assets/themes/` — Per-theme CSS (enhanced.css, tailadmin.css) + `fonts/outfit/` for self-hosted fonts
+- Global helpers `getActiveTheme()` / `setActiveTheme()` — DB value with config fallback; config registry validates slugs
+- `isThemeEnabled()` — Backward-compatible; delegates to `isThemeActive()`
 
-**Pitfalls:** Base layout overlay is a full copy; keep in sync with Coolify upstream. Keep Appearance tab visibility aligned with route/component auth (owner/admin only) to avoid navigation dead-ends for other roles. Keep theme color work token-driven in `theme.css` (`--ce-*` variables) before adding selector-specific overrides.
+**Pitfalls:** Theme CSS must scope to `html[data-ce-theme="SLUG"]`. Config `ui_theme.themes` validates slugs. Base layout overlay is a full copy; keep in sync with Coolify upstream. Keep Appearance tab visibility aligned with route/component auth (owner/admin only). Use `--ce-*` variables for palette changes.
 
 See `docs/features/enhanced-ui-theme/` for PRD, plan, and README.
 

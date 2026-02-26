@@ -61,26 +61,56 @@ class EnhancedUiSettings extends Model
         Cache::forget(self::cacheKey($key));
     }
 
+    public static function getActiveTheme(): ?string
+    {
+        if (! config('coolify-enhanced.enabled', false)) {
+            return null;
+        }
+
+        try {
+            $theme = static::get('active_theme', null);
+        } catch (\Throwable $e) {
+            $theme = null;
+        }
+
+        if (! $theme || ! is_string($theme) || trim($theme) === '') {
+            $theme = config('coolify-enhanced.ui_theme.default');
+        }
+
+        if (! $theme || ! is_string($theme) || trim($theme) === '') {
+            return null;
+        }
+
+        $themes = config('coolify-enhanced.ui_theme.themes', []);
+
+        if (! array_key_exists($theme, $themes)) {
+            return null;
+        }
+
+        return $theme;
+    }
+
+    public static function setActiveTheme(?string $theme): void
+    {
+        static::set('active_theme', ($theme && trim($theme) !== '') ? $theme : '');
+    }
+
+    public static function isThemeActive(): bool
+    {
+        return static::getActiveTheme() !== null;
+    }
+
+    public static function getAvailableThemes(): array
+    {
+        return config('coolify-enhanced.ui_theme.themes', []);
+    }
+
     /**
-     * Check whether the enhanced UI theme is active.
-     *
-     * Returns true only when the package is enabled AND the DB/config
-     * flag is on.  Safe to call from Blade views — catches DB errors
-     * (e.g. table not yet migrated) and falls back to config value.
+     * Backward-compatible check — returns true when any theme is active.
      */
     public static function isThemeEnabled(): bool
     {
-        if (! config('coolify-enhanced.enabled', false)) {
-            return false;
-        }
-
-        $default = (bool) config('coolify-enhanced.ui_theme.enabled', false);
-
-        try {
-            return (bool) static::get('enhanced_theme_enabled', $default);
-        } catch (\Throwable $e) {
-            return $default;
-        }
+        return static::isThemeActive();
     }
 
     protected static function cacheKey(string $key): string

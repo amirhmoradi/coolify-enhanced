@@ -90,10 +90,10 @@ COPY --chown=www-data:www-data src/Overrides/Views/components/settings/navbar.bl
 COPY --chown=www-data:www-data src/Overrides/Views/layouts/base.blade.php \
     /var/www/html/resources/views/layouts/base.blade.php
 
-# Enhanced UI theme CSS (optional corporate-grade theme, activatable in Settings > Appearance)
-RUN mkdir -p /var/www/html/public/vendor/coolify-enhanced
-COPY --chown=www-data:www-data resources/assets/theme.css \
-    /var/www/html/public/vendor/coolify-enhanced/theme.css
+# Enhanced UI themes (CSS + self-hosted fonts, selectable in Settings > Appearance)
+RUN mkdir -p /var/www/html/public/vendor/coolify-enhanced/themes
+COPY --chown=www-data:www-data resources/assets/themes/ \
+    /var/www/html/public/vendor/coolify-enhanced/themes/
 
 # Override shared helper to merge custom template sources into service templates
 COPY --chown=www-data:www-data src/Overrides/Helpers/shared.php \

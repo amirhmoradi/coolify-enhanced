@@ -72,12 +72,23 @@
         <script type="text/javascript" src="{{ URL::asset('js/apexcharts.js') }}"></script>
         <script type="text/javascript" src="{{ URL::asset('js/purify.min.js') }}"></script>
     @endauth
-    {{-- Coolify Enhanced: Optional enhanced UI theme (CSS + minimal JS) --}}
-    @if(class_exists('AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings') && \AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings::isThemeEnabled())
-    <link rel="stylesheet" href="{{ asset('vendor/coolify-enhanced/theme.css') }}">
+    {{-- Coolify Enhanced: Multi-theme support (CSS + data attribute) --}}
+    @php
+        $ceActiveTheme = class_exists('AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings')
+            ? \AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings::getActiveTheme()
+            : null;
+        $ceThemeConfig = $ceActiveTheme
+            ? config("coolify-enhanced.ui_theme.themes.{$ceActiveTheme}")
+            : null;
+    @endphp
+    @if($ceThemeConfig)
+    <link rel="stylesheet" href="{{ asset('vendor/coolify-enhanced/' . $ceThemeConfig['css']) }}">
     <script>
-    (function(){ document.documentElement.setAttribute('data-ce-theme', 'enhanced'); })();
+    (function(){ document.documentElement.setAttribute('data-ce-theme', '{{ $ceActiveTheme }}'); })();
     </script>
+    @if(!empty($ceThemeConfig['js']))
+    <script defer src="{{ asset('vendor/coolify-enhanced/' . $ceThemeConfig['js']) }}"></script>
+    @endif
     @endif
 </head>
 @section('body')

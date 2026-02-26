@@ -6,16 +6,20 @@
 
     <h2>Appearance</h2>
     <div class="subtitle">
-        Optional corporate-grade modern UI theme with refined colors for both light and dark mode.
-        This only changes visual styling; no layout or behavior changes.
+        Choose a visual theme for the Coolify dashboard. Themes change colors, typography, and visual styling without altering layout or behavior.
     </div>
 
-    <div class="flex flex-col gap-2 pt-4 max-w-2xl">
-        <x-forms.checkbox
-            id="enhancedThemeEnabled"
-            instantSave="saveEnhancedTheme"
-            label="Use enhanced theme"
-            helper="Applies the enhanced UI palette instance-wide. Refresh your browser after toggling to see the new styles everywhere."
-        />
+    <div class="flex flex-col gap-2 pt-4 max-w-md">
+        <label for="activeTheme" class="text-sm font-medium">Dashboard Theme</label>
+        <select id="activeTheme" wire:model="activeTheme" wire:change="saveTheme" class="input w-full">
+            <option value="">Default (Coolify)</option>
+            @foreach ($availableThemes as $slug => $theme)
+                <option value="{{ $slug }}">{{ $theme['label'] }}{{ $theme['font_label'] ? ' — ' . $theme['font_label'] . ' font' : '' }}</option>
+            @endforeach
+        </select>
+        @if ($activeTheme && isset($availableThemes[$activeTheme]))
+            <p class="text-sm pt-1">{{ $availableThemes[$activeTheme]['description'] }}</p>
+        @endif
+        <p class="text-xs pt-2">Reload the page after changing themes to see the new styling applied.</p>
     </div>
 </div>

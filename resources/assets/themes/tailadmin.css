@@ -1,0 +1,530 @@
+/**
+ * Coolify Enhanced — TailAdmin-inspired enterprise dashboard theme
+ * Scoped to [data-ce-theme="tailadmin"] only.
+ * No DOM/layout changes; visual polish only.
+ */
+
+/* =========================================================
+   Self-hosted font declarations (Outfit — variable weight)
+   ========================================================= */
+@font-face {
+    font-display: swap;
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 400;
+    src: url('fonts/outfit/outfit-latin.woff2') format('woff2');
+}
+@font-face {
+    font-display: swap;
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 500;
+    src: url('fonts/outfit/outfit-latin.woff2') format('woff2');
+}
+@font-face {
+    font-display: swap;
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 600;
+    src: url('fonts/outfit/outfit-latin.woff2') format('woff2');
+}
+@font-face {
+    font-display: swap;
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 700;
+    src: url('fonts/outfit/outfit-latin.woff2') format('woff2');
+}
+
+/* =========================================================
+   Light mode tokens
+   ========================================================= */
+html[data-ce-theme="tailadmin"] {
+    color-scheme: light;
+
+    --ta-bg: #f9fafb;
+    --ta-surface-1: #ffffff;
+    --ta-surface-2: #f2f4f7;
+    --ta-border: #e4e7ec;
+    --ta-border-strong: #d0d5dd;
+    --ta-text-primary: #101828;
+    --ta-text-secondary: #667085;
+    --ta-accent: #465fff;
+    --ta-accent-hover: #3641f5;
+    --ta-accent-soft: #ecf3ff;
+    --ta-success: #12b76a;
+    --ta-warning: #f79009;
+    --ta-danger: #f04438;
+    --ta-ring: rgba(70, 95, 255, 0.12);
+    --ta-shadow-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+    --ta-shadow-sm: 0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+    --ta-shadow-md: 0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+    --ta-focus-ring: 0px 0px 0px 4px rgba(70, 95, 255, 0.12);
+
+    --color-base: var(--ta-bg);
+    --color-coolgray-100: var(--ta-surface-1);
+    --color-coolgray-200: var(--ta-surface-2);
+    --color-coolgray-300: var(--ta-border);
+    --color-coolgray-400: var(--ta-border-strong);
+    --color-coolgray-500: #98a2b3;
+    --color-coollabs: var(--ta-accent);
+    --color-coollabs-50: var(--ta-accent-soft);
+    --color-coollabs-100: #3641f5;
+    --color-coollabs-200: #2a31d8;
+    --color-coollabs-300: #252dae;
+    --color-success: var(--ta-success);
+    --color-error: var(--ta-danger);
+    --color-warning: var(--ta-warning);
+    --color-warning-400: #fdb022;
+    --color-warning-500: #f79009;
+}
+
+/* =========================================================
+   Dark mode tokens
+   ========================================================= */
+html.dark[data-ce-theme="tailadmin"] {
+    color-scheme: dark;
+
+    --ta-bg: #0c111d;
+    --ta-surface-1: #1d2939;
+    --ta-surface-2: #1a2231;
+    --ta-border: #344054;
+    --ta-border-strong: #475467;
+    --ta-text-primary: #f2f4f7;
+    --ta-text-secondary: #98a2b3;
+    --ta-accent: #7592ff;
+    --ta-accent-hover: #9cb9ff;
+    --ta-accent-soft: #161950;
+    --ta-success: #32d583;
+    --ta-warning: #fdb022;
+    --ta-danger: #f97066;
+    --ta-ring: rgba(117, 146, 255, 0.24);
+    --ta-shadow-xs: 0px 1px 2px 0px rgba(0, 0, 0, 0.2);
+    --ta-shadow-sm: 0px 1px 3px 0px rgba(0, 0, 0, 0.3), 0px 1px 2px 0px rgba(0, 0, 0, 0.2);
+    --ta-shadow-md: 0px 4px 8px -2px rgba(0, 0, 0, 0.32), 0px 2px 4px -2px rgba(0, 0, 0, 0.24);
+    --ta-focus-ring: 0px 0px 0px 4px rgba(117, 146, 255, 0.24);
+
+    --color-base: var(--ta-bg);
+    --color-coolgray-100: var(--ta-surface-1);
+    --color-coolgray-200: var(--ta-surface-2);
+    --color-coolgray-300: var(--ta-border);
+    --color-coolgray-400: var(--ta-border-strong);
+    --color-coolgray-500: #667085;
+    --color-coollabs: var(--ta-accent);
+    --color-coollabs-50: var(--ta-accent-soft);
+    --color-coollabs-100: #9cb9ff;
+    --color-coollabs-200: #7592ff;
+    --color-coollabs-300: #465fff;
+    --color-success: var(--ta-success);
+    --color-error: var(--ta-danger);
+    --color-warning: var(--ta-warning);
+    --color-warning-400: #fdb022;
+    --color-warning-500: #f79009;
+}
+
+/* =========================================================
+   Typography
+   ========================================================= */
+html[data-ce-theme="tailadmin"] body {
+    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: 'liga' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================
+   Foundation: backgrounds, text, borders
+   ========================================================= */
+html[data-ce-theme="tailadmin"] body,
+html[data-ce-theme="tailadmin"] .dark\:bg-base,
+html[data-ce-theme="tailadmin"] .bg-gray-50 {
+    background-color: var(--ta-bg) !important;
+}
+
+html[data-ce-theme="tailadmin"] .dark\:bg-coolgray-100,
+html[data-ce-theme="tailadmin"] .dark\:bg-coolgray-200 {
+    background-color: var(--ta-surface-1) !important;
+}
+
+html[data-ce-theme="tailadmin"] .bg-white {
+    background-color: var(--ta-surface-1) !important;
+    border-color: var(--ta-border);
+    box-shadow: var(--ta-shadow-sm);
+    border-radius: 1rem;
+}
+
+html[data-ce-theme="tailadmin"] .border-neutral-200,
+html[data-ce-theme="tailadmin"] .dark\:border-transparent,
+html[data-ce-theme="tailadmin"] .dark\:border-coolgray-200,
+html[data-ce-theme="tailadmin"] .dark\:border-coolgray-200\/50,
+html[data-ce-theme="tailadmin"] .divide-neutral-300,
+html[data-ce-theme="tailadmin"] .dark\:divide-coolgray-200 {
+    border-color: var(--ta-border) !important;
+}
+
+html[data-ce-theme="tailadmin"] .dark\:text-white,
+html[data-ce-theme="tailadmin"] .text-black {
+    color: var(--ta-text-primary) !important;
+}
+
+html[data-ce-theme="tailadmin"] .dark\:text-neutral-400,
+html[data-ce-theme="tailadmin"] .text-neutral-600,
+html[data-ce-theme="tailadmin"] .subtitle {
+    color: var(--ta-text-secondary) !important;
+}
+
+/* =========================================================
+   Accent system and feedback colors
+   ========================================================= */
+html[data-ce-theme="tailadmin"] .text-coollabs,
+html[data-ce-theme="tailadmin"] .dark\:text-coollabs {
+    color: var(--ta-accent) !important;
+}
+
+html[data-ce-theme="tailadmin"] .bg-coollabs {
+    background-color: var(--ta-accent) !important;
+}
+
+html[data-ce-theme="tailadmin"] .hover\:bg-coollabs-100:hover {
+    background-color: var(--ta-accent-hover) !important;
+}
+
+html[data-ce-theme="tailadmin"] .text-success {
+    color: var(--ta-success) !important;
+}
+
+html[data-ce-theme="tailadmin"] .text-warning {
+    color: var(--ta-warning) !important;
+}
+
+html[data-ce-theme="tailadmin"] .text-error {
+    color: var(--ta-danger) !important;
+}
+
+/* =========================================================
+   Navigation
+   ========================================================= */
+html[data-ce-theme="tailadmin"] .navbar-main,
+html[data-ce-theme="tailadmin"] .bg-white\/95.dark\:bg-base\/95 {
+    background-color: var(--ta-surface-1) !important;
+    border-bottom: 1px solid var(--ta-border) !important;
+    box-shadow: var(--ta-shadow-sm);
+    backdrop-filter: none;
+}
+
+html.dark[data-ce-theme="tailadmin"] .navbar-main,
+html.dark[data-ce-theme="tailadmin"] .bg-white\/95.dark\:bg-base\/95 {
+    background-color: #101828 !important;
+    border-bottom-color: var(--ta-border) !important;
+}
+
+/* =========================================================
+   Form controls
+   ========================================================= */
+html[data-ce-theme="tailadmin"] input.input,
+html[data-ce-theme="tailadmin"] textarea.input,
+html[data-ce-theme="tailadmin"] select.input,
+html[data-ce-theme="tailadmin"] .input {
+    border-color: var(--ta-border-strong) !important;
+    background-color: var(--ta-surface-1) !important;
+    color: var(--ta-text-primary) !important;
+    border-radius: 0.5rem;
+    box-shadow: var(--ta-shadow-xs);
+    transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+
+html.dark[data-ce-theme="tailadmin"] input.input,
+html.dark[data-ce-theme="tailadmin"] textarea.input,
+html.dark[data-ce-theme="tailadmin"] select.input,
+html.dark[data-ce-theme="tailadmin"] .input {
+    background-color: var(--ta-surface-1) !important;
+    border-color: var(--ta-border) !important;
+}
+
+html[data-ce-theme="tailadmin"] input.input:hover,
+html[data-ce-theme="tailadmin"] textarea.input:hover,
+html[data-ce-theme="tailadmin"] select.input:hover,
+html[data-ce-theme="tailadmin"] .input:hover {
+    border-color: var(--ta-accent) !important;
+}
+
+html[data-ce-theme="tailadmin"] input.input:focus,
+html[data-ce-theme="tailadmin"] textarea.input:focus,
+html[data-ce-theme="tailadmin"] select.input:focus,
+html[data-ce-theme="tailadmin"] .input:focus {
+    border-color: var(--ta-accent) !important;
+    box-shadow: var(--ta-focus-ring) !important;
+}
+
+/* =========================================================
+   Buttons, links, and interaction details
+   ========================================================= */
+html[data-ce-theme="tailadmin"] button,
+html[data-ce-theme="tailadmin"] a,
+html[data-ce-theme="tailadmin"] input,
+html[data-ce-theme="tailadmin"] select,
+html[data-ce-theme="tailadmin"] textarea {
+    transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+
+html[data-ce-theme="tailadmin"] button:focus-visible,
+html[data-ce-theme="tailadmin"] a:focus-visible,
+html[data-ce-theme="tailadmin"] input:focus-visible,
+html[data-ce-theme="tailadmin"] select:focus-visible,
+html[data-ce-theme="tailadmin"] textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--ta-focus-ring);
+}
+
+html[data-ce-theme="tailadmin"] a:hover {
+    color: var(--ta-accent) !important;
+}
+
+/* =========================================================
+   Tables
+   ========================================================= */
+html[data-ce-theme="tailadmin"] table thead {
+    background-color: var(--ta-surface-2);
+}
+
+html.dark[data-ce-theme="tailadmin"] table thead {
+    background-color: #101828;
+}
+
+html[data-ce-theme="tailadmin"] table tbody tr {
+    border-color: var(--ta-border);
+}
+
+html[data-ce-theme="tailadmin"] table tr:hover {
+    background-color: var(--ta-surface-2);
+}
+
+html.dark[data-ce-theme="tailadmin"] table tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+html[data-ce-theme="tailadmin"] table th,
+html[data-ce-theme="tailadmin"] table td {
+    border-color: var(--ta-border) !important;
+}
+
+html.dark[data-ce-theme="tailadmin"] table th,
+html.dark[data-ce-theme="tailadmin"] table td {
+    border-color: var(--ta-border) !important;
+}
+
+/* =========================================================
+   Cards and surfaces
+   ========================================================= */
+html.dark[data-ce-theme="tailadmin"] .bg-white {
+    background-color: var(--ta-surface-1) !important;
+    border-color: var(--ta-border);
+    box-shadow: var(--ta-shadow-sm);
+}
+
+/* =========================================================
+   Code blocks
+   ========================================================= */
+html[data-ce-theme="tailadmin"] code {
+    background-color: var(--ta-surface-2);
+    color: var(--ta-text-primary);
+    border: 1px solid var(--ta-border-strong);
+    border-radius: 0.375rem;
+    padding: 0.1rem 0.35rem;
+}
+
+html.dark[data-ce-theme="tailadmin"] code {
+    background-color: #101828;
+    border-color: var(--ta-border);
+}
+
+/* =========================================================
+   Scrollbar
+   ========================================================= */
+html[data-ce-theme="tailadmin"] *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html[data-ce-theme="tailadmin"] *::-webkit-scrollbar-thumb {
+    background-color: var(--ta-border);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+html.dark[data-ce-theme="tailadmin"] *::-webkit-scrollbar-thumb {
+    background-color: var(--ta-border);
+}
+
+html[data-ce-theme="tailadmin"] *::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+/* =========================================================
+   Border radius overrides
+   ========================================================= */
+html[data-ce-theme="tailadmin"] .rounded {
+    border-radius: 1rem;
+}
+
+html[data-ce-theme="tailadmin"] .rounded-md {
+    border-radius: 0.5rem;
+}
+
+/* =========================================================
+   Standard Tailwind color overrides
+   Coolify uses raw Tailwind color classes that bypass the
+   custom property system. Remap to TailAdmin's palette.
+   ========================================================= */
+
+/* --- Red → Error --- */
+html[data-ce-theme="tailadmin"] .text-red-500 { color: #f04438 !important; }
+html[data-ce-theme="tailadmin"] .text-red-600 { color: #d92d20 !important; }
+html[data-ce-theme="tailadmin"] .text-red-800 { color: #912018 !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:text-red-400 { color: #f97066 !important; }
+
+html[data-ce-theme="tailadmin"] .bg-red-50 { background-color: #fef3f2 !important; }
+html[data-ce-theme="tailadmin"] .bg-red-100 { background-color: #fee4e2 !important; }
+html[data-ce-theme="tailadmin"] .bg-red-500 { background-color: #f04438 !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-red-900 { background-color: #7a271a !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-red-900\/30 { background-color: rgba(122, 39, 26, 0.3) !important; }
+
+html[data-ce-theme="tailadmin"] .border-red-300 { border-color: #fda29b !important; }
+html[data-ce-theme="tailadmin"] .border-red-500 { border-color: #f04438 !important; }
+
+/* --- Green → Success --- */
+html[data-ce-theme="tailadmin"] .text-green-500 { color: #12b76a !important; }
+html[data-ce-theme="tailadmin"] .text-green-600 { color: #039855 !important; }
+html[data-ce-theme="tailadmin"] .text-green-700 { color: #027a48 !important; }
+html[data-ce-theme="tailadmin"] .text-green-800 { color: #05603a !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:text-green-400 { color: #32d583 !important; }
+
+html[data-ce-theme="tailadmin"] .bg-green-50 { background-color: #ecfdf3 !important; }
+html[data-ce-theme="tailadmin"] .bg-green-100 { background-color: #d1fadf !important; }
+html[data-ce-theme="tailadmin"] .bg-green-500 { background-color: #12b76a !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-green-900 { background-color: #054f31 !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-green-900\/30 { background-color: rgba(5, 79, 49, 0.3) !important; }
+
+html[data-ce-theme="tailadmin"] .border-green-300 { border-color: #6ce9a6 !important; }
+html[data-ce-theme="tailadmin"] .border-green-500 { border-color: #12b76a !important; }
+
+/* --- Blue → Blue-light --- */
+html[data-ce-theme="tailadmin"] .text-blue-300 { color: #7cd4fd !important; }
+html[data-ce-theme="tailadmin"] .text-blue-700 { color: #026aa2 !important; }
+html[data-ce-theme="tailadmin"] .text-blue-800 { color: #065986 !important; }
+
+html[data-ce-theme="tailadmin"] .bg-blue-50 { background-color: #f0f9ff !important; }
+html[data-ce-theme="tailadmin"] .bg-blue-100 { background-color: #e0f2fe !important; }
+html[data-ce-theme="tailadmin"] .bg-blue-500 { background-color: #0ba5ec !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-blue-900 { background-color: #0b4a6f !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-blue-900\/30 { background-color: rgba(11, 74, 111, 0.3) !important; }
+
+html[data-ce-theme="tailadmin"] .border-blue-300 { border-color: #7cd4fd !important; }
+html[data-ce-theme="tailadmin"] .border-blue-500 { border-color: #0ba5ec !important; }
+
+/* --- Yellow/Orange → Warning --- */
+html[data-ce-theme="tailadmin"] .text-yellow-400 { color: #fdb022 !important; }
+html[data-ce-theme="tailadmin"] .text-yellow-600 { color: #dc6803 !important; }
+html[data-ce-theme="tailadmin"] .text-orange-400 { color: #fd853a !important; }
+
+html[data-ce-theme="tailadmin"] .bg-yellow-50 { background-color: #fffaeb !important; }
+html[data-ce-theme="tailadmin"] .bg-yellow-500 { background-color: #f79009 !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-yellow-900 { background-color: #7a2e0e !important; }
+
+html[data-ce-theme="tailadmin"] .border-yellow-500 { border-color: #f79009 !important; }
+
+/* --- Purple → Brand --- */
+html[data-ce-theme="tailadmin"] .text-purple-300 { color: #9cb9ff !important; }
+html[data-ce-theme="tailadmin"] .text-purple-700 { color: #2a31d8 !important; }
+
+html[data-ce-theme="tailadmin"] .bg-purple-100 { background-color: #dde9ff !important; }
+html[data-ce-theme="tailadmin"] .bg-purple-500 { background-color: #465fff !important; }
+
+html[data-ce-theme="tailadmin"] .border-purple-500 { border-color: #465fff !important; }
+
+/* --- Gray/Neutral → TailAdmin warm grays --- */
+html[data-ce-theme="tailadmin"] .bg-neutral-100 { background-color: #f2f4f7 !important; }
+html[data-ce-theme="tailadmin"] .bg-neutral-200 { background-color: #e4e7ec !important; }
+html[data-ce-theme="tailadmin"] .hover\:bg-neutral-100:hover { background-color: #f2f4f7 !important; }
+html[data-ce-theme="tailadmin"] .hover\:bg-neutral-200:hover { background-color: #e4e7ec !important; }
+html[data-ce-theme="tailadmin"] .hover\:bg-neutral-300:hover { background-color: #d0d5dd !important; }
+
+html[data-ce-theme="tailadmin"] .text-neutral-300 { color: #d0d5dd !important; }
+html[data-ce-theme="tailadmin"] .text-neutral-500 { color: #667085 !important; }
+html[data-ce-theme="tailadmin"] .text-neutral-700 { color: #344054 !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:text-neutral-600 { color: #475467 !important; }
+html.dark[data-ce-theme="tailadmin"] .dark\:text-neutral-700 { color: #344054 !important; }
+
+html[data-ce-theme="tailadmin"] .border-neutral-300 { border-color: #d0d5dd !important; }
+html[data-ce-theme="tailadmin"] .border-neutral-400 { border-color: #98a2b3 !important; }
+
+html[data-ce-theme="tailadmin"] .text-gray-400 { color: #98a2b3 !important; }
+html[data-ce-theme="tailadmin"] .text-gray-500 { color: #667085 !important; }
+html[data-ce-theme="tailadmin"] .text-gray-800 { color: #1d2939 !important; }
+html[data-ce-theme="tailadmin"] .hover\:text-gray-300:hover { color: #d0d5dd !important; }
+html[data-ce-theme="tailadmin"] .bg-slate-900\/75 { background-color: rgba(12, 17, 29, 0.75) !important; }
+
+/* =========================================================
+   Form focus hardcoded color overrides
+   Coolify's .input/.input-sticky/.input-select use hardcoded
+   hex box-shadows; remap to theme-aware values.
+   ========================================================= */
+
+html[data-ce-theme="tailadmin"] .input,
+html[data-ce-theme="tailadmin"] .input-sticky,
+html[data-ce-theme="tailadmin"] .input-select {
+    box-shadow: inset 0 0 0 2px var(--ta-border-strong) !important;
+}
+
+html.dark[data-ce-theme="tailadmin"] .input,
+html.dark[data-ce-theme="tailadmin"] .input-sticky,
+html.dark[data-ce-theme="tailadmin"] .input-select {
+    box-shadow: inset 0 0 0 2px var(--ta-border) !important;
+}
+
+html[data-ce-theme="tailadmin"] .input:focus-within,
+html[data-ce-theme="tailadmin"] .input-sticky:focus-within,
+html[data-ce-theme="tailadmin"] .input-select:focus-within {
+    box-shadow: inset 4px 0 0 var(--ta-accent), inset 0 0 0 2px var(--ta-border-strong) !important;
+}
+
+html.dark[data-ce-theme="tailadmin"] .input:focus-within,
+html.dark[data-ce-theme="tailadmin"] .input-sticky:focus-within,
+html.dark[data-ce-theme="tailadmin"] .input-select:focus-within {
+    box-shadow: inset 4px 0 0 var(--ta-accent), inset 0 0 0 2px var(--ta-border) !important;
+}
+
+html[data-ce-theme="tailadmin"] .input.dirty,
+html[data-ce-theme="tailadmin"] [wire\:dirty] .input {
+    box-shadow: inset 4px 0 0 var(--ta-accent), inset 0 0 0 2px var(--ta-border-strong) !important;
+}
+
+html.dark[data-ce-theme="tailadmin"] .input.dirty,
+html.dark[data-ce-theme="tailadmin"] [wire\:dirty] .input {
+    box-shadow: inset 4px 0 0 var(--ta-accent), inset 0 0 0 2px var(--ta-border) !important;
+}
+
+html[data-ce-theme="tailadmin"] [x-data*="toast"] > div {
+    box-shadow: var(--ta-shadow-md) !important;
+}
+
+/* =========================================================
+   Focus ring and hover ring overrides
+   ========================================================= */
+html[data-ce-theme="tailadmin"] .focus-visible\:ring-coollabs:focus-visible {
+    --tw-ring-color: var(--ta-accent) !important;
+}
+
+html[data-ce-theme="tailadmin"] .dark\:focus-visible\:ring-warning:focus-visible {
+    --tw-ring-color: var(--ta-accent) !important;
+}
+
+html[data-ce-theme="tailadmin"] .hover\:ring-coollabs:hover {
+    --tw-ring-color: var(--ta-accent) !important;
+}
+
+html[data-ce-theme="tailadmin"] .dark\:hover\:ring-warning:hover {
+    --tw-ring-color: var(--ta-accent) !important;
+}
