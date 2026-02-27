@@ -1,5 +1,10 @@
 <!DOCTYPE html>
-<html data-theme="dark" lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+@php
+    $ceThemeSlug = class_exists('AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings')
+        ? \AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings::getActiveTheme()
+        : null;
+@endphp
+<html data-theme="dark" @if($ceThemeSlug) data-ce-theme="{{ $ceThemeSlug }}" @endif lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <script>
     // Immediate theme application - runs before any rendering
     (function () {
@@ -72,19 +77,22 @@
         <script type="text/javascript" src="{{ URL::asset('js/apexcharts.js') }}"></script>
         <script type="text/javascript" src="{{ URL::asset('js/purify.min.js') }}"></script>
     @endauth
-    {{-- Coolify Enhanced: Multi-theme support (CSS + data attribute) --}}
+    {{-- Coolify Enhanced: Multi-theme support (CSS + JS) --}}
     @php
-        $ceActiveTheme = class_exists('AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings')
-            ? \AmirhMoradi\CoolifyEnhanced\Models\EnhancedUiSettings::getActiveTheme()
-            : null;
-        $ceThemeConfig = $ceActiveTheme
-            ? config("coolify-enhanced.ui_theme.themes.{$ceActiveTheme}")
+        $ceThemeConfig = $ceThemeSlug
+            ? config("coolify-enhanced.ui_theme.themes.{$ceThemeSlug}")
             : null;
     @endphp
     @if($ceThemeConfig)
     <link rel="stylesheet" href="{{ asset('vendor/coolify-enhanced/' . $ceThemeConfig['css']) }}">
-    <script>
-    (function(){ document.documentElement.setAttribute('data-ce-theme', '{{ $ceActiveTheme }}'); })();
+    <script data-navigate-once>
+    (function(){
+        var slug = '{{ $ceThemeSlug }}';
+        document.documentElement.setAttribute('data-ce-theme', slug);
+        document.addEventListener('livewire:navigated', function() {
+            document.documentElement.setAttribute('data-ce-theme', slug);
+        });
+    })();
     </script>
     @if(!empty($ceThemeConfig['js']))
     <script defer src="{{ asset('vendor/coolify-enhanced/' . $ceThemeConfig['js']) }}"></script>
