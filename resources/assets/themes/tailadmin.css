@@ -442,6 +442,26 @@ html[data-ce-theme="tailadmin"] .custom-modal {
     border-radius: 0.75rem !important;
 }
 
+/* Native dialog modal dark mode fix */
+html.dark[data-ce-theme="tailadmin"] .modal-box {
+    background-color: var(--ta-surface-1) !important;
+    color: var(--ta-text-primary) !important;
+    border: 1px solid var(--ta-border) !important;
+}
+
+html.dark[data-ce-theme="tailadmin"] .modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html.dark[data-ce-theme="tailadmin"] dialog.modal {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Ensure dark:bg-base wins over bg-neutral-* / bg-white in dark modals */
+html.dark[data-ce-theme="tailadmin"] .dark\:bg-base {
+    background-color: var(--ta-bg) !important;
+}
+
 html[data-ce-theme="tailadmin"] .on-box:hover {
     background-color: var(--ta-surface-2) !important;
 }
