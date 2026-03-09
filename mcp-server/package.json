@@ -1,0 +1,58 @@
+{
+  "name": "@amirhmoradi/coolify-enhanced-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Corelix Platform — Coolify management with permissions, backups, templates, networks, and cluster tools",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "bin": {
+    "coolify-enhanced-mcp": "dist/bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/src/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "coolify",
+    "paas",
+    "infrastructure",
+    "deployment",
+    "ai",
+    "claude"
+  ],
+  "author": "Amir Moradi",
+  "license": "MIT",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/corelixio/platform",
+    "directory": "mcp-server"
+  },
+  "homepage": "https://github.com/corelixio/platform/tree/main/mcp-server",
+  "bugs": {
+    "url": "https://github.com/corelixio/platform/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
