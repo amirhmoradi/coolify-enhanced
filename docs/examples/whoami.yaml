@@ -1,0 +1,19 @@
+# documentation: https://github.com/traefik/whoami
+# slogan: A tiny Go webserver that prints OS info and HTTP request to output.
+# tags: test,debug,whoami,traefik,http
+# category: development
+# logo: svgs/traefik.svg
+# port: 80
+
+services:
+  whoami:
+    image: traefik/whoami:latest
+    environment:
+      - SERVICE_FQDN_WHOAMI_80
+      - WHOAMI_PORT_NUMBER=${WHOAMI_PORT_NUMBER:-80}
+      - WHOAMI_NAME=${WHOAMI_NAME:-whoami}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

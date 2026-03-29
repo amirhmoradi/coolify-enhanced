@@ -1,0 +1,128 @@
+# =================================================================
+# Publish MCP Server to npm
+# =================================================================
+# Publishes @amirhmoradi/coolify-enhanced-mcp to the npm registry.
+#
+# Triggers:
+#   - GitHub release (published) — publishes the release version
+#   - Push to main when mcp-server/ files change — publishes current version
+#   - Manual workflow_dispatch
+#
+# Required secret: NPM_TOKEN (npm Automation token)
+# =================================================================
+
+name: Publish MCP Server to npm
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'mcp-server/src/**'
+      - 'mcp-server/bin/**'
+      - 'mcp-server/package.json'
+      - 'mcp-server/tsconfig.json'
+      - '.github/workflows/npm-publish.yml'
+
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip actual publish)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: mcp-server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: 'mcp-server/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          if [ ! -f dist/src/index.js ]; then
+            echo "::error::Build failed — dist/src/index.js not found"
+            exit 1
+          fi
+          if [ ! -f dist/bin/cli.js ]; then
+            echo "::error::Build failed — dist/bin/cli.js not found"
+            exit 1
+          fi
+          echo "Build output verified."
+          ls -la dist/src/ dist/bin/
+
+      - name: Check if version is already published
+        id: version-check
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this exact version already exists on npm
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version 2>/dev/null; then
+            echo "already_published=true" >> $GITHUB_OUTPUT
+            echo "::warning::${PACKAGE_NAME}@${PACKAGE_VERSION} is already published. Skipping."
+          else
+            echo "already_published=false" >> $GITHUB_OUTPUT
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} not yet published. Will publish."
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: steps.version-check.outputs.already_published == 'false' && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish dry run
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        run: npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Output summary
+        run: |
+          echo "## npm Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** ${{ steps.version-check.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.version-check.outputs.already_published }}" = "true" ]; then
+            echo "- **Status:** Skipped (already published)" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "- **Status:** Dry run (not published)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** Published" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "npx @amirhmoradi/coolify-enhanced-mcp" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
